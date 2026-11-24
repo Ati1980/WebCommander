@@ -1,0 +1,6 @@
+{
+  "name": "CommanderWeb",
+  "description": "Dual-pane & Miller-columns web file manager inspired by OneCommander with local PC folder access, multi-tabs, batch rename, folder compare, and live file preview.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}

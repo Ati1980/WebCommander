@@ -1,0 +1,1823 @@
+<!DOCTYPE html>
+<html lang="th" class="dark">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>CommanderWeb — Dual-Pane File Manager</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&family=Noto+Sans+Thai:wght@400;500;600;700&display=swap" rel="stylesheet">
+  <script>
+    tailwind.config = {
+      darkMode: 'class',
+      theme: {
+        extend: {
+          fontFamily: {
+            sans: ['"Inter"', '"Noto Sans Thai"', 'system-ui', 'sans-serif'],
+            mono: ['"JetBrains Mono"', 'monospace'],
+          },
+          colors: {
+            oc: {
+              bg: '#121418',
+              surface: '#181b20',
+              panel: '#1e2229',
+              hover: '#262b34',
+              active: '#2b3544',
+              border: '#2c313a',
+              accent: '#3b82f6',
+              accentHover: '#2563eb',
+            }
+          }
+        }
+      }
+    }
+  </script>
+  <style>
+    /* Custom Scrollbars for sleek desktop feel */
+    ::-webkit-scrollbar {
+      width: 6px;
+      height: 6px;
+    }
+    ::-webkit-scrollbar-track {
+      background: transparent;
+    }
+    ::-webkit-scrollbar-thumb {
+      background: rgba(120, 130, 145, 0.3);
+      border-radius: 9999px;
+    }
+    ::-webkit-scrollbar-thumb:hover {
+      background: rgba(120, 130, 145, 0.55);
+    }
+    .no-select {
+      user-select: none;
+      -webkit-user-select: none;
+    }
+    .resizer-x {
+      cursor: col-resize;
+      transition: background-color 0.15s ease;
+    }
+    .resizer-x:hover, .resizer-x.resizing {
+      background-color: #3b82f6;
+    }
+    @keyframes slideUp {
+      from { transform: translateY(10px); opacity: 0; }
+      to { transform: translateY(0); opacity: 1; }
+    }
+    .animate-slide-up {
+      animation: slideUp 0.18s ease-out forwards;
+    }
+  </style>
+</head>
+<body class="bg-slate-100 text-slate-800 dark:bg-oc-bg dark:text-slate-200 h-screen w-screen overflow-hidden flex flex-col font-sans antialiased">
+
+  <!-- TOP APPLICATION HEADER & COMMAND TOOLBAR -->
+  <header class="bg-white dark:bg-oc-surface border-b border-slate-200 dark:border-oc-border px-3 py-2 flex flex-wrap items-center justify-between gap-2 shrink-0 z-20">
+    <!-- Brand & Quick Mode Badge -->
+    <div class="flex items-center gap-2.5">
+      <div class="w-8 h-8 rounded-lg bg-gradient-to-br from-blue-500 to-indigo-600 flex items-center justify-center text-white shadow-sm">
+        <svg class="w-5 h-5" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+          <path stroke-linecap="round" stroke-linejoin="round" d="M3 7v10a2 2 0 002 2h14a2 2 0 002-2V9a2 2 0 00-2-2h-6l-2-2H5a2 2 0 00-2 2z" />
+          <path stroke-linecap="round" stroke-linejoin="round" d="M12 11v6m0 0l-2-2m2 2l2-2" />
+        </svg>
+      </div>
+      <div>
+        <div class="flex items-center gap-2">
+          <h1 class="font-bold text-sm tracking-tight text-slate-900 dark:text-white">CommanderWeb</h1>
+          <span class="text-[10px] font-semibold uppercase tracking-wider px-1.5 py-0.5 rounded bg-blue-500/10 text-blue-600 dark:text-blue-400 border border-blue-500/20">Dual-Pane</span>
+        </div>
+        <p class="text-[11px] text-slate-500 dark:text-slate-400 hidden sm:block">จัดการไฟล์สองหน้าต่าง • Copy / Move / Sync</p>
+      </div>
+    </div>
+
+    <!-- Primary File Operations Toolbar -->
+    <div class="flex items-center flex-wrap gap-1 sm:gap-1.5 bg-slate-100 dark:bg-oc-panel p-1 rounded-xl border border-slate-200 dark:border-oc-border">
+      <button onclick="app.triggerCopy()" title="คัดลอกไปยังอีกฝั่ง (F5)" class="toolbar-btn group flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg text-xs font-medium bg-blue-600 hover:bg-blue-500 text-white shadow-sm transition active:scale-95">
+        <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M8 7v8a2 2 0 002 2h6M8 7V5a2 2 0 012-2h4.586a1 1 0 01.707.293l4.414 4.414a1 1 0 01.293.707V15a2 2 0 01-2 2h-2M8 7H6a2 2 0 00-2 2v10a2 2 0 002 2h8a2 2 0 002-2v-2"/></svg>
+        <span>Copy</span>
+        <kbd class="hidden md:inline-block text-[10px] px-1 py-0.2 bg-blue-700/80 rounded text-blue-100 font-mono">F5</kbd>
+      </button>
+
+      <button onclick="app.triggerMove()" title="ย้ายไปยังอีกฝั่ง (F6)" class="toolbar-btn flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg text-xs font-medium bg-amber-600 hover:bg-amber-500 text-white shadow-sm transition active:scale-95">
+        <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M13 5l7 7-7 7M5 5l7 7-7 7"/></svg>
+        <span>Move</span>
+        <kbd class="hidden md:inline-block text-[10px] px-1 py-0.2 bg-amber-700/80 rounded text-amber-100 font-mono">F6</kbd>
+      </button>
+
+      <div class="h-4 w-[1px] bg-slate-300 dark:bg-oc-border mx-0.5"></div>
+
+      <button onclick="app.openNewFolderModal()" title="สร้างโฟลเดอร์ใหม่ (F7)" class="flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg text-xs font-medium text-slate-700 dark:text-slate-200 hover:bg-white dark:hover:bg-oc-hover transition">
+        <svg class="w-3.5 h-3.5 text-emerald-500" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M9 13h6m-3-3v6m-9 1V7a2 2 0 012-2h6l2 2h6a2 2 0 012 2v8a2 2 0 01-2 2H5a2 2 0 01-2-2z"/></svg>
+        <span class="hidden sm:inline">New Folder</span>
+        <kbd class="hidden lg:inline-block text-[10px] px-1 bg-slate-200 dark:bg-oc-surface rounded text-slate-500 font-mono">F7</kbd>
+      </button>
+
+      <button onclick="app.openRenameModal()" title="เปลี่ยนชื่อ (F2)" class="flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg text-xs font-medium text-slate-700 dark:text-slate-200 hover:bg-white dark:hover:bg-oc-hover transition">
+        <svg class="w-3.5 h-3.5 text-sky-500" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z"/></svg>
+        <span class="hidden sm:inline">Rename</span>
+        <kbd class="hidden lg:inline-block text-[10px] px-1 bg-slate-200 dark:bg-oc-surface rounded text-slate-500 font-mono">F2</kbd>
+      </button>
+
+      <button onclick="app.openDeleteModal()" title="ลบไฟล์ (Del)" class="flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg text-xs font-medium text-rose-600 dark:text-rose-400 hover:bg-rose-500/10 transition">
+        <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"/></svg>
+        <span class="hidden sm:inline">Delete</span>
+      </button>
+
+      <div class="h-4 w-[1px] bg-slate-300 dark:bg-oc-border mx-0.5"></div>
+
+      <button onclick="app.swapPanes()" title="สลับหน้าต่างซ้าย-ขวา (Ctrl+U)" class="flex items-center gap-1 px-2 py-1.5 rounded-lg text-xs font-medium text-slate-600 dark:text-slate-300 hover:bg-white dark:hover:bg-oc-hover transition">
+        <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M8 7h12m0 0l-4-4m4 4l-4 4m0 6H4m0 0l4 4m-4-4l4-4"/></svg>
+        <span class="hidden xl:inline">Swap</span>
+      </button>
+    </div>
+
+    <!-- Right Controls: Inspector Toggle, Theme Toggle, Shortcuts Help -->
+    <div class="flex items-center gap-1.5">
+      <button onclick="app.toggleInspector()" id="btn-toggle-inspector" title="เปิด/ปิด แผงดูตัวอย่างไฟล์ (Preview Inspector)" class="flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg text-xs font-medium border border-slate-200 dark:border-oc-border bg-slate-50 dark:bg-oc-panel text-slate-700 dark:text-slate-200 hover:border-blue-500/50 transition">
+        <svg class="w-3.5 h-3.5 text-indigo-400" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"/><path stroke-linecap="round" stroke-linejoin="round" d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z"/></svg>
+        <span class="hidden md:inline">Preview</span>
+      </button>
+
+      <button onclick="app.toggleTheme()" title="สลับโหมดสี Dark / Light" class="p-2 rounded-lg border border-slate-200 dark:border-oc-border bg-slate-50 dark:bg-oc-panel text-slate-600 dark:text-slate-300 hover:bg-slate-200 dark:hover:bg-oc-hover transition">
+        <svg id="icon-sun" class="w-4 h-4 hidden dark:block text-amber-400" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M12 3v1m0 16v1m9-9h-1M4 12H3m15.364 6.364l-.707-.707M6.343 6.343l-.707-.707m12.728 0l-.707.707M6.343 17.657l-.707.707M16 12a4 4 0 11-8 0 4 4 0 018 0z"/></svg>
+        <svg id="icon-moon" class="w-4 h-4 block dark:hidden text-slate-700" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M20.354 15.354A9 9 0 018.646 3.646 9.003 9.003 0 0012 21a9.003 9.003 0 008.354-5.646z"/></svg>
+      </button>
+
+      <button onclick="app.openHelpModal()" title="คีย์ลัดและวิธีใช้งาน" class="p-2 rounded-lg border border-slate-200 dark:border-oc-border bg-slate-50 dark:bg-oc-panel text-slate-600 dark:text-slate-300 hover:bg-slate-200 dark:hover:bg-oc-hover transition">
+        <svg class="w-4 h-4" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M8.228 9c.549-1.165 2.03-2 3.772-2 2.21 0 4 1.343 4 3 0 1.4-1.278 2.575-3.006 2.907-.542.104-.994.54-.994 1.093m0 3h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"/></svg>
+      </button>
+    </div>
+  </header>
+
+  <!-- MAIN WORKSPACE: DUAL PANES + INSPECTOR -->
+  <main id="workspace" class="flex-1 flex flex-col lg:flex-row overflow-hidden relative">
+
+    <!-- LEFT PANE -->
+    <section id="pane-left" onclick="app.setActivePane('left')" class="flex-1 min-w-0 flex flex-col bg-white dark:bg-oc-surface border-b lg:border-b-0 border-slate-200 dark:border-oc-border transition-colors relative">
+      <!-- Rendered dynamically by JS -->
+    </section>
+
+    <!-- RESIZABLE DIVIDER -->
+    <div id="pane-resizer" class="resizer-x hidden lg:block w-1.5 bg-slate-200 dark:bg-oc-bg border-x border-slate-300/50 dark:border-oc-border shrink-0 z-10" title="ลากเพื่อปรับขนาดหน้าต่าง"></div>
+
+    <!-- RIGHT PANE -->
+    <section id="pane-right" onclick="app.setActivePane('right')" class="flex-1 min-w-0 flex flex-col bg-white dark:bg-oc-surface transition-colors relative">
+      <!-- Rendered dynamically by JS -->
+    </section>
+
+    <!-- COLLAPSIBLE PREVIEW & INSPECTOR PANEL (OneCommander Style) -->
+    <aside id="inspector-panel" class="w-full lg:w-80 xl:w-96 border-t lg:border-t-0 lg:border-l border-slate-200 dark:border-oc-border bg-slate-50 dark:bg-oc-panel flex flex-col shrink-0 overflow-hidden transition-all">
+      <div class="px-3.5 py-2.5 border-b border-slate-200 dark:border-oc-border flex items-center justify-between">
+        <div class="flex items-center gap-2">
+          <span class="w-2 h-2 rounded-full bg-indigo-500"></span>
+          <h2 class="text-xs font-semibold uppercase tracking-wider text-slate-600 dark:text-slate-300">Quick Preview & Info</h2>
+        </div>
+        <button onclick="app.toggleInspector()" class="text-slate-400 hover:text-slate-600 dark:hover:text-white p-1 rounded">
+          <svg class="w-4 h-4" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M6 18L18 6M6 6l12 12"/></svg>
+        </button>
+      </div>
+      <div id="inspector-content" class="flex-1 overflow-y-auto p-4 flex flex-col gap-4">
+        <!-- Populated dynamically -->
+      </div>
+    </aside>
+
+  </main>
+
+  <!-- BOTTOM TASK QUEUE & TRANSFER PROGRESS BAR -->
+  <footer id="task-drawer" class="bg-white dark:bg-oc-surface border-t border-slate-200 dark:border-oc-border shrink-0 z-20 transition-all">
+    <div class="px-3.5 py-1.5 flex items-center justify-between text-xs">
+      <div class="flex items-center gap-3 overflow-hidden">
+        <div id="task-status-indicator" class="flex items-center gap-2 font-medium text-slate-700 dark:text-slate-200 shrink-0">
+          <span class="w-2 h-2 rounded-full bg-emerald-500"></span>
+          <span>พร้อมทำงาน (Ready)</span>
+        </div>
+        <div id="task-progress-wrapper" class="hidden items-center gap-2.5 flex-1 max-w-md">
+          <div class="w-36 sm:w-48 h-2 bg-slate-200 dark:bg-oc-panel rounded-full overflow-hidden">
+            <div id="task-progress-bar" class="h-full bg-blue-500 transition-all duration-150" style="width: 0%"></div>
+          </div>
+          <span id="task-progress-text" class="font-mono text-[11px] text-slate-500 dark:text-slate-400">0%</span>
+        </div>
+        <p id="task-last-log" class="text-slate-500 dark:text-slate-400 truncate hidden sm:block">เคล็ดลับ: กด "Open PC Folder" เพื่อเชื่อมต่อโฟลเดอร์จริงในเครื่องคอมพิวเตอร์ของคุณ</p>
+      </div>
+      <div class="flex items-center gap-2 shrink-0">
+        <button onclick="app.toggleTaskLogs()" class="text-[11px] px-2 py-0.5 rounded bg-slate-100 dark:bg-oc-panel hover:bg-slate-200 dark:hover:bg-oc-hover text-slate-600 dark:text-slate-300 border border-slate-200 dark:border-oc-border">
+          ประวัติการทำงาน (<span id="log-count">0</span>)
+        </button>
+      </div>
+    </div>
+    <!-- Expandable Log History -->
+    <div id="task-logs-panel" class="hidden max-h-32 overflow-y-auto border-t border-slate-200 dark:border-oc-border bg-slate-50 dark:bg-oc-bg px-4 py-2 font-mono text-[11px] space-y-1">
+      <div class="text-slate-400">ยังไม่มีประวัติการคัดลอกหรือย้ายไฟล์...</div>
+    </div>
+  </footer>
+
+  <!-- MODAL BACKDROP & DIALOG CONTAINER -->
+  <div id="modal-backdrop" class="hidden fixed inset-0 bg-black/60 backdrop-blur-xs z-50 flex items-center justify-center p-4">
+    <div id="modal-box" class="bg-white dark:bg-oc-panel border border-slate-200 dark:border-oc-border rounded-2xl shadow-2xl w-full max-w-md overflow-hidden animate-slide-up">
+      <!-- Modal content injected dynamically -->
+    </div>
+  </div>
+
+  <!-- TOAST NOTIFICATION CONTAINER -->
+  <div id="toast-container" class="fixed bottom-12 right-4 z-50 flex flex-col gap-2 pointer-events-none"></div>
+
+  <script>
+    /**
+     * CommanderWeb - Dual-Pane File Manager Engine
+     * Supports:
+     * 1. Real Local File System via File System Access API (window.showDirectoryPicker)
+     * 2. In-Memory Virtual File System (Sandbox Mode) for instant testing & restricted iframes
+     * 3. Cross-Mode Copy & Move (Virtual <-> Virtual, Local <-> Local, Virtual <-> Local)
+     */
+
+    // =========================================================================
+    // 1. VIRTUAL FILE SYSTEM (SANDBOX DRIVE) INITIAL DATA
+    // =========================================================================
+    const createInitialVirtualFS = () => ({
+      name: 'VirtualDrive (V:)',
+      kind: 'directory',
+      lastModified: Date.now() - 86400000 * 5,
+      children: {
+        'Documents': {
+          name: 'Documents',
+          kind: 'directory',
+          lastModified: Date.now() - 86400000 * 2,
+          children: {
+            'Project_Proposal_2026.md': {
+              name: 'Project_Proposal_2026.md',
+              kind: 'file',
+              size: 4820,
+              lastModified: Date.now() - 3600000 * 5,
+              mimeType: 'text/markdown',
+              content: `# แผนงานพัฒนาเว็บไซต์องค์กร 2026\n\n## 1. วัตถุประสงค์\n- ปรับปรุงระบบจัดการเอกสารให้รองรับการทำงานแบบ Dual-Pane\n- เพิ่มความเร็วในการรับส่งไฟล์ระหว่างแผนก\n\n## 2. เทคโนโลยีที่ใช้\n- HTML5 File System Access API\n- Tailwind CSS & Modern JavaScript\n\nสถานะ: รออนุมัติงบประมาณ`
+            },
+            'Budget_Summary_Q4.csv': {
+              name: 'Budget_Summary_Q4.csv',
+              kind: 'file',
+              size: 1240,
+              lastModified: Date.now() - 86400000,
+              mimeType: 'text/csv',
+              content: `Category,Planned,Actual,Status\nCloud Servers,45000,42300,Under Budget\nSoftware Licenses,28000,28000,On Track\nHardware Upgrade,120000,115500,Completed\nTraining & Workshop,30000,18500,In Progress`
+            },
+            'Meeting_Notes.txt': {
+              name: 'Meeting_Notes.txt',
+              kind: 'file',
+              size: 890,
+              lastModified: Date.now() - 7200000,
+              mimeType: 'text/plain',
+              content: `สรุปการประชุมทีมพัฒนา (วันที่ 24 พ.ย. 2026)\n----------------------------------------\n1. ทดสอบฟีเจอร์ Copy (F5) และ Move (F6) ระหว่างหน้าต่างซ้าย-ขวา\n2. ตรวจสอบการเชื่อมต่อโฟลเดอร์จริงในเครื่องผ่านปุ่ม Open PC Folder\n3. เตรียมส่งมอบงานภายในวันศุกร์นี้`
+            }
+          }
+        },
+        'Projects': {
+          name: 'Projects',
+          kind: 'directory',
+          lastModified: Date.now() - 86400000 * 3,
+          children: {
+            'app.config.json': {
+              name: 'app.config.json',
+              kind: 'file',
+              size: 645,
+              lastModified: Date.now() - 1800000,
+              mimeType: 'application/json',
+              content: JSON.stringify({
+                appName: "CommanderWeb",
+                version: "3.2.0",
+                theme: "dark-slate",
+                features: {
+                  dualPane: true,
+                  fileSystemAccessAPI: true,
+                  dragAndDrop: true
+                }
+              }, null, 2)
+            },
+            'index.js': {
+              name: 'index.js',
+              kind: 'file',
+              size: 2150,
+              lastModified: Date.now() - 5400000,
+              mimeType: 'text/javascript',
+              content: `// Sample Entry Script\nexport async function syncFolders(source, target) {\n  console.log('Starting sync from', source.name, 'to', target.name);\n  const entries = await source.list();\n  for (const item of entries) {\n    await target.copyFrom(item);\n  }\n  return { success: true, count: entries.length };\n}`
+            }
+          }
+        },
+        'Media_Assets': {
+          name: 'Media_Assets',
+          kind: 'directory',
+          lastModified: Date.now() - 86400000 * 4,
+          children: {
+            'Banner_Preview.svg': {
+              name: 'Banner_Preview.svg',
+              kind: 'file',
+              size: 3420,
+              lastModified: Date.now() - 86400000 * 1,
+              mimeType: 'image/svg+xml',
+              content: `<svg xmlns="http://www.w3.org/2000/svg" width="400" height="220" viewBox="0 0 400 220"><defs><linearGradient id="g" x1="0%" y1="0%" x2="100%" y2="100%"><stop offset="0%" stop-color="#3b82f6"/><stop offset="100%" stop-color="#6366f1"/></linearGradient></defs><rect width="400" height="220" rx="16" fill="url(#g)"/><circle cx="330" cy="50" r="70" fill="rgba(255,255,255,0.12)"/><text x="30" y="105" fill="#ffffff" font-family="sans-serif" font-size="24" font-weight="bold">CommanderWeb UI</text><text x="30" y="135" fill="#dbeafe" font-family="sans-serif" font-size="14">Dual-Pane File Transfer Engine</text></svg>`
+            },
+            'Architecture_Diagram.svg': {
+              name: 'Architecture_Diagram.svg',
+              kind: 'file',
+              size: 2890,
+              lastModified: Date.now() - 86400000 * 2,
+              mimeType: 'image/svg+xml',
+              content: `<svg xmlns="http://www.w3.org/2000/svg" width="400" height="220" viewBox="0 0 400 220"><rect width="400" height="220" rx="16" fill="#0f172a"/><rect x="30" y="65" width="130" height="90" rx="10" fill="#1e293b" stroke="#38bdf8" stroke-width="2"/><text x="95" y="115" fill="#38bdf8" font-family="sans-serif" font-size="14" text-anchor="middle" font-weight="bold">Left Pane</text><rect x="240" y="65" width="130" height="90" rx="10" fill="#1e293b" stroke="#34d399" stroke-width="2"/><text x="305" y="115" fill="#34d399" font-family="sans-serif" font-size="14" text-anchor="middle" font-weight="bold">Right Pane</text><path d="M168 100 L232 100 M222 92 L232 100 L222 108" stroke="#f59e0b" stroke-width="3" fill="none"/><path d="M232 125 L168 125 M178 117 L168 125 L178 133" stroke="#60a5fa" stroke-width="3" fill="none"/></svg>`
+            }
+          }
+        },
+        'Backup_Archive': {
+          name: 'Backup_Archive',
+          kind: 'directory',
+          lastModified: Date.now() - 86400000 * 10,
+          children: {
+            'README_Backup.txt': {
+              name: 'README_Backup.txt',
+              kind: 'file',
+              size: 412,
+              lastModified: Date.now() - 86400000 * 10,
+              mimeType: 'text/plain',
+              content: `โฟลเดอร์สำหรับทดสอบการ Copy (F5) และ Move (F6) ไฟล์จากหน้าต่างฝั่งซ้ายมาไว้ที่นี่!`
+            }
+          }
+        },
+        'Quick_Start_Guide.txt': {
+          name: 'Quick_Start_Guide.txt',
+          kind: 'file',
+          size: 1520,
+          lastModified: Date.now() - 600000,
+          mimeType: 'text/plain',
+          content: `ยินดีต้อนรับสู่ CommanderWeb!\n\nวิธีใช้งานเบื้องต้น:\n1. เชื่อมต่อโฟลเดอร์จริงในเครื่อง: คลิกปุ่ม "Open PC Folder" ที่แถบด้านบนของแต่ละฝั่ง\n2. เลือกไฟล์หลายไฟล์: คลิกค้าง, กด Ctrl+Click หรือ Shift+Click หรือติ๊กช่องสี่เหลี่ยมด้านหน้า\n3. คัดลอก (Copy): กดปุ่ม Copy ด้านบน หรือกดปุ่ม F5 หรือลากไฟล์ข้ามฝั่ง\n4. ย้ายไฟล์ (Move): กดปุ่ม Move ด้านบน หรือกดปุ่ม F6 หรือกด Shift ค้างไว้แล้วลากข้ามฝั่ง\n5. สร้างโฟลเดอร์ใหม่: กด F7 | เปลี่ยนชื่อ: กด F2 | ลบไฟล์: กด Delete`
+        }
+      }
+    });
+
+    // =========================================================================
+    // 2. FILE SYSTEM ADAPTERS (ABSTRACTION LAYER)
+    // =========================================================================
+    class VirtualFSAdapter {
+      constructor(rootNode, pathArray = []) {
+        this.type = 'virtual';
+        this.root = rootNode;
+        this.path = pathArray; // e.g. ['Documents']
+      }
+
+      getCurrentNode() {
+        let curr = this.root;
+        for (const segment of this.path) {
+          if (curr.children && curr.children[segment]) {
+            curr = curr.children[segment];
+          } else {
+            this.path = [];
+            return this.root;
+          }
+        }
+        return curr;
+      }
+
+      getBreadcrumbs() {
+        return [{ name: this.root.name, path: [] }, ...this.path.map((name, idx) => ({
+          name,
+          path: this.path.slice(0, idx + 1)
+        }))];
+      }
+
+      async listEntries() {
+        const node = this.getCurrentNode();
+        const items = Object.values(node.children || {}).map(child => ({
+          name: child.name,
+          kind: child.kind,
+          size: child.kind === 'directory' ? 0 : (child.size || (child.content ? new Blob([child.content]).size : 0)),
+          lastModified: child.lastModified || Date.now(),
+          mimeType: child.mimeType || '',
+          raw: child
+        }));
+        return items;
+      }
+
+      async createDirectory(name) {
+        const node = this.getCurrentNode();
+        if (node.children[name]) {
+          throw new Error(`มีโฟลเดอร์หรือไฟล์ชื่อ "${name}" อยู่แล้ว`);
+        }
+        node.children[name] = {
+          name,
+          kind: 'directory',
+          lastModified: Date.now(),
+          children: {}
+        };
+      }
+
+      async renameEntry(oldName, newName) {
+        const node = this.getCurrentNode();
+        if (!node.children[oldName]) throw new Error('ไม่พบไฟล์ต้นทาง');
+        if (oldName === newName) return;
+        if (node.children[newName]) throw new Error(`มีชื่อ "${newName}" อยู่แล้วในโฟลเดอร์นี้`);
+        const item = node.children[oldName];
+        item.name = newName;
+        item.lastModified = Date.now();
+        node.children[newName] = item;
+        delete node.children[oldName];
+      }
+
+      async deleteEntry(name) {
+        const node = this.getCurrentNode();
+        delete node.children[name];
+      }
+
+      async hasEntry(name) {
+        const node = this.getCurrentNode();
+        return Boolean(node.children && node.children[name]);
+      }
+
+      async readFileBlob(entry) {
+        const raw = entry.raw;
+        if (raw.blob) return raw.blob;
+        return new Blob([raw.content || ''], { type: raw.mimeType || 'text/plain' });
+      }
+
+      async writeFileFromBlob(name, blob, lastModified = Date.now()) {
+        const node = this.getCurrentNode();
+        let textContent = null;
+        if (blob.type.startsWith('text/') || name.match(/\.(txt|md|json|js|ts|html|css|csv|xml|svg|py|java|cpp|log)$/i)) {
+          textContent = await blob.text();
+        }
+        node.children[name] = {
+          name,
+          kind: 'file',
+          size: blob.size,
+          lastModified,
+          mimeType: blob.type || guessMimeType(name),
+          content: textContent,
+          blob: blob
+        };
+      }
+
+      getChildAdapter(dirName) {
+        return new VirtualFSAdapter(this.root, [...this.path, dirName]);
+      }
+    }
+
+    class LocalFSAdapter {
+      constructor(rootHandle, stack = []) {
+        this.type = 'local';
+        this.rootHandle = rootHandle;
+        // stack: [{ name, handle }]
+        this.stack = stack.length ? stack : [{ name: rootHandle.name, handle: rootHandle }];
+      }
+
+      getCurrentHandle() {
+        return this.stack[this.stack.length - 1].handle;
+      }
+
+      getBreadcrumbs() {
+        return this.stack.map((item, idx) => ({
+          name: item.name,
+          stackIndex: idx
+        }));
+      }
+
+      async listEntries() {
+        const dirHandle = this.getCurrentHandle();
+        const items = [];
+        for await (const [name, handle] of dirHandle.entries()) {
+          if (handle.kind === 'file') {
+            try {
+              const file = await handle.getFile();
+              items.push({
+                name,
+                kind: 'file',
+                size: file.size,
+                lastModified: file.lastModified,
+                mimeType: file.type || guessMimeType(name),
+                raw: handle
+              });
+            } catch (e) {
+              items.push({ name, kind: 'file', size: 0, lastModified: Date.now(), mimeType: '', raw: handle });
+            }
+          } else {
+            items.push({
+              name,
+              kind: 'directory',
+              size: 0,
+              lastModified: Date.now(),
+              mimeType: '',
+              raw: handle
+            });
+          }
+        }
+        return items;
+      }
+
+      async createDirectory(name) {
+        const dirHandle = this.getCurrentHandle();
+        await dirHandle.getDirectoryHandle(name, { create: true });
+      }
+
+      async hasEntry(name) {
+        const dirHandle = this.getCurrentHandle();
+        try {
+          await dirHandle.getFileHandle(name);
+          return true;
+        } catch {
+          try {
+            await dirHandle.getDirectoryHandle(name);
+            return true;
+          } catch {
+            return false;
+          }
+        }
+      }
+
+      async renameEntry(oldName, newName) {
+        if (oldName === newName) return;
+        const dirHandle = this.getCurrentHandle();
+        // Check if native move() is supported on handle (Chromium 111+)
+        let entryHandle;
+        try {
+          entryHandle = await dirHandle.getFileHandle(oldName);
+        } catch {
+          entryHandle = await dirHandle.getDirectoryHandle(oldName);
+        }
+
+        if (typeof entryHandle.move === 'function') {
+          await entryHandle.move(newName);
+        } else {
+          // Fallback: copy recursively then remove old
+          await copyEntryBetweenAdapters(this, { name: oldName, kind: entryHandle.kind, raw: entryHandle }, this, newName);
+          await this.deleteEntry(oldName);
+        }
+      }
+
+      async deleteEntry(name) {
+        const dirHandle = this.getCurrentHandle();
+        await dirHandle.removeEntry(name, { recursive: true });
+      }
+
+      async readFileBlob(entry) {
+        const file = await entry.raw.getFile();
+        return file;
+      }
+
+      async writeFileFromBlob(name, blob) {
+        const dirHandle = this.getCurrentHandle();
+        const fileHandle = await dirHandle.getFileHandle(name, { create: true });
+        const writable = await fileHandle.createWritable();
+        await writable.write(blob);
+        await writable.close();
+      }
+
+      async getChildAdapter(dirName) {
+        const dirHandle = this.getCurrentHandle();
+        const childHandle = await dirHandle.getDirectoryHandle(dirName, { create: true });
+        return new LocalFSAdapter(this.rootHandle, [...this.stack, { name: dirName, handle: childHandle }]);
+      }
+    }
+
+    // Recursive Copy Helper across ANY combination of Virtual & Local adapters
+    async function copyEntryBetweenAdapters(srcAdapter, entry, destAdapter, targetName = entry.name, onProgress = null) {
+      if (entry.kind === 'file') {
+        const blob = await srcAdapter.readFileBlob(entry);
+        await destAdapter.writeFileFromBlob(targetName, blob, entry.lastModified);
+        if (onProgress) onProgress(targetName);
+      } else if (entry.kind === 'directory') {
+        await destAdapter.createDirectory(targetName).catch(() => {});
+        const childSrc = await srcAdapter.getChildAdapter(entry.name);
+        const childDest = await destAdapter.getChildAdapter(targetName);
+        const children = await childSrc.listEntries();
+        for (const child of children) {
+          await copyEntryBetweenAdapters(childSrc, child, childDest, child.name, onProgress);
+        }
+        if (onProgress) onProgress(targetName + '/');
+      }
+    }
+
+    // =========================================================================
+    // 3. UTILITY FUNCTIONS (FORMATTING & ICONS)
+    // =========================================================================
+    function formatBytes(bytes) {
+      if (bytes === 0) return '0 B';
+      const k = 1024;
+      const sizes = ['B', 'KB', 'MB', 'GB', 'TB'];
+      const i = Math.floor(Math.log(bytes) / Math.log(k));
+      return parseFloat((bytes / Math.pow(k, i)).toFixed(1)) + ' ' + sizes[i];
+    }
+
+    function formatDate(ts) {
+      if (!ts) return '—';
+      const d = new Date(ts);
+      return d.toLocaleDateString('th-TH', { day: '2-digit', month: 'short', year: '2-digit' }) + ' ' +
+             d.toLocaleTimeString('th-TH', { hour: '2-digit', minute: '2-digit' });
+    }
+
+    function guessMimeType(filename) {
+      const ext = filename.split('.').pop().toLowerCase();
+      const map = {
+        txt: 'text/plain', md: 'text/markdown', json: 'application/json',
+        js: 'text/javascript', ts: 'text/typescript', html: 'text/html',
+        css: 'text/css', csv: 'text/csv', svg: 'image/svg+xml',
+        png: 'image/png', jpg: 'image/jpeg', jpeg: 'image/jpeg',
+        gif: 'image/gif', webp: 'image/webp', pdf: 'application/pdf',
+        zip: 'application/zip', mp4: 'video/mp4', mp3: 'audio/mpeg'
+      };
+      return map[ext] || 'application/octet-stream';
+    }
+
+    function getFileExtensionLabel(entry) {
+      if (entry.kind === 'directory') return 'Folder';
+      const parts = entry.name.split('.');
+      return parts.length > 1 ? parts.pop().toUpperCase() : 'File';
+    }
+
+    function getFileIconSVG(entry) {
+      if (entry.kind === 'directory') {
+        return `<svg class="w-4 h-4 text-amber-400 shrink-0" fill="currentColor" viewBox="0 0 20 20"><path d="M2 6a2 2 0 012-2h5l2 2h5a2 2 0 012 2v6a2 2 0 01-2 2H4a2 2 0 01-2-2V6z"/></svg>`;
+      }
+      const ext = entry.name.split('.').pop().toLowerCase();
+      if (['png', 'jpg', 'jpeg', 'gif', 'webp', 'svg'].includes(ext)) {
+        return `<svg class="w-4 h-4 text-purple-400 shrink-0" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z"/></svg>`;
+      }
+      if (['js', 'ts', 'html', 'css', 'json', 'py', 'java', 'cpp'].includes(ext)) {
+        return `<svg class="w-4 h-4 text-sky-400 shrink-0" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M10 20l4-16m4 4l4 4-4 4M6 16l-4-4 4-4"/></svg>`;
+      }
+      if (['md', 'txt', 'csv', 'log', 'pdf'].includes(ext)) {
+        return `<svg class="w-4 h-4 text-emerald-400 shrink-0" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"/></svg>`;
+      }
+      if (['zip', 'rar', '7z', 'tar', 'gz'].includes(ext)) {
+        return `<svg class="w-4 h-4 text-rose-400 shrink-0" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M5 8h14M5 8a2 2 0 110-4h14a2 2 0 110 4M5 8v10a2 2 0 002 2h10a2 2 0 002-2V8m-9 4h4"/></svg>`;
+      }
+      return `<svg class="w-4 h-4 text-slate-400 shrink-0" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M7 21h10a2 2 0 002-2V9.414a1 1 0 00-.293-.707l-5.414-5.414A1 1 0 0012.586 3H7a2 2 0 00-2 2v14a2 2 0 002 2z"/></svg>`;
+    }
+
+    function escapeHTML(str) {
+      return String(str)
+        .replace(/&/g, '&amp;')
+        .replace(/</g, '&lt;')
+        .replace(/>/g, '&gt;')
+        .replace(/"/g, '&quot;');
+    }
+
+    // =========================================================================
+    // 4. MAIN APPLICATION CONTROLLER
+    // =========================================================================
+    class CommanderApp {
+      constructor() {
+        this.virtualRoot = createInitialVirtualFS();
+        this.activePane = 'left';
+        this.inspectorVisible = true;
+        this.logs = [];
+        this.dragPayload = null;
+
+        this.panes = {
+          left: {
+            id: 'left',
+            adapter: new VirtualFSAdapter(this.virtualRoot, ['Documents']),
+            entries: [],
+            selected: new Set(),
+            lastSelectedIndex: -1,
+            sortBy: 'name', // 'name' | 'size' | 'date' | 'type'
+            sortAsc: true,
+            filter: '',
+            loading: false
+          },
+          right: {
+            id: 'right',
+            adapter: new VirtualFSAdapter(this.virtualRoot, ['Backup_Archive']),
+            entries: [],
+            selected: new Set(),
+            lastSelectedIndex: -1,
+            sortBy: 'name',
+            sortAsc: true,
+            filter: '',
+            loading: false
+          }
+        };
+
+        this.init();
+      }
+
+      async init() {
+        this.bindKeyboardShortcuts();
+        this.bindResizer();
+        await Promise.all([this.refreshPane('left'), this.refreshPane('right')]);
+        this.updateInspector();
+      }
+
+      setActivePane(paneId) {
+        if (this.activePane !== paneId) {
+          this.activePane = paneId;
+          this.renderPane('left');
+          this.renderPane('right');
+          this.updateInspector();
+        }
+      }
+
+      getOppositePaneId(paneId = this.activePane) {
+        return paneId === 'left' ? 'right' : 'left';
+      }
+
+      // Mount Real PC Folder via File System Access API
+      async mountLocalFolder(paneId) {
+        this.setActivePane(paneId);
+        if (!('showDirectoryPicker' in window)) {
+          this.showAlertModal(
+            'เบราว์เซอร์ไม่รองรับ File System Access API',
+            'เบราว์เซอร์ของคุณ (หรือโหมด iframe ที่ถูกจำกัดสิทธิ์) ไม่รองรับการเปิดโฟลเดอร์จริงในเครื่องโดยตรง กรุณาใช้ Chrome / Edge เวอร์ชันล่าสุดบนเดสก์ท็อป หรือทดสอบใช้งานบน Virtual Drive (V:) ได้ทันทีครับ'
+          );
+          return;
+        }
+        try {
+          const dirHandle = await window.showDirectoryPicker({ mode: 'readwrite' });
+          this.panes[paneId].adapter = new LocalFSAdapter(dirHandle);
+          this.panes[paneId].selected.clear();
+          this.panes[paneId].filter = '';
+          await this.refreshPane(paneId);
+          this.addLog(`เชื่อมต่อโฟลเดอร์จริง "${dirHandle.name}" ที่หน้าต่างฝั่ง${paneId === 'left' ? 'ซ้าย' : 'ขวา'}`);
+          this.showToast(`เชื่อมต่อโฟลเดอร์ "${dirHandle.name}" สำเร็จ`, 'success');
+        } catch (err) {
+          if (err.name !== 'AbortError') {
+            this.showAlertModal(
+              'ไม่สามารถเข้าถึงโฟลเดอร์ในเครื่องได้',
+              `ระบบแจ้งข้อผิดพลาด: ${err.message}\n\n(หมายเหตุ: หากเปิดแอปในกรอบ Preview ที่ถูกจำกัดสิทธิ์ความปลอดภัย ให้ดาวน์โหลดไฟล์ HTML นี้ไปเปิดในเบราว์เซอร์โดยตรงเพื่อเข้าถึงไฟล์ในเครื่อง PC)`
+            );
+          }
+        }
+      }
+
+      async switchToVirtualDrive(paneId) {
+        this.setActivePane(paneId);
+        this.panes[paneId].adapter = new VirtualFSAdapter(this.virtualRoot, []);
+        this.panes[paneId].selected.clear();
+        this.panes[paneId].filter = '';
+        await this.refreshPane(paneId);
+        this.showToast('สลับกลับสู่ Virtual Drive (V:) แล้ว', 'info');
+      }
+
+      async refreshPane(paneId) {
+        const pane = this.panes[paneId];
+        pane.loading = true;
+        this.renderPane(paneId);
+        try {
+          const rawEntries = await pane.adapter.listEntries();
+          pane.entries = this.sortEntries(rawEntries, pane.sortBy, pane.sortAsc);
+          // Clean up selection of items that no longer exist
+          const validNames = new Set(pane.entries.map(e => e.name));
+          for (const sel of Array.from(pane.selected)) {
+            if (!validNames.has(sel)) pane.selected.delete(sel);
+          }
+        } catch (err) {
+          this.showToast(`โหลดข้อมูลล้มเหลว: ${err.message}`, 'error');
+        } finally {
+          pane.loading = false;
+          this.renderPane(paneId);
+          if (paneId === this.activePane) this.updateInspector();
+        }
+      }
+
+      sortEntries(entries, sortBy, sortAsc) {
+        return [...entries].sort((a, b) => {
+          // Always keep directories on top
+          if (a.kind !== b.kind) {
+            return a.kind === 'directory' ? -1 : 1;
+          }
+          let cmp = 0;
+          if (sortBy === 'name') {
+            cmp = a.name.localeCompare(b.name, undefined, { numeric: true, sensitivity: 'base' });
+          } else if (sortBy === 'size') {
+            cmp = a.size - b.size;
+          } else if (sortBy === 'date') {
+            cmp = a.lastModified - b.lastModified;
+          } else if (sortBy === 'type') {
+            cmp = getFileExtensionLabel(a).localeCompare(getFileExtensionLabel(b));
+          }
+          return sortAsc ? cmp : -cmp;
+        });
+      }
+
+      toggleSort(paneId, column) {
+        const pane = this.panes[paneId];
+        if (pane.sortBy === column) {
+          pane.sortAsc = !pane.sortAsc;
+        } else {
+          pane.sortBy = column;
+          pane.sortAsc = true;
+        }
+        pane.entries = this.sortEntries(pane.entries, pane.sortBy, pane.sortAsc);
+        this.renderPane(paneId);
+      }
+
+      setFilter(paneId, val) {
+        this.panes[paneId].filter = val;
+        this.renderPane(paneId);
+      }
+
+      getFilteredEntries(paneId) {
+        const pane = this.panes[paneId];
+        if (!pane.filter.trim()) return pane.entries;
+        const q = pane.filter.toLowerCase();
+        return pane.entries.filter(e => e.name.toLowerCase().includes(q));
+      }
+
+      // Navigation
+      async navigateBreadcrumb(paneId, index) {
+        this.setActivePane(paneId);
+        const pane = this.panes[paneId];
+        if (pane.adapter.type === 'virtual') {
+          const crumbs = pane.adapter.getBreadcrumbs();
+          const targetPath = crumbs[index]?.path || [];
+          pane.adapter = new VirtualFSAdapter(this.virtualRoot, targetPath);
+        } else {
+          const newStack = pane.adapter.stack.slice(0, index + 1);
+          pane.adapter = new LocalFSAdapter(pane.adapter.rootHandle, newStack);
+        }
+        pane.selected.clear();
+        pane.lastSelectedIndex = -1;
+        await this.refreshPane(paneId);
+      }
+
+      async navigateUp(paneId) {
+        const pane = this.panes[paneId];
+        const crumbs = pane.adapter.getBreadcrumbs();
+        if (crumbs.length > 1) {
+          await this.navigateBreadcrumb(paneId, crumbs.length - 2);
+        }
+      }
+
+      async openEntry(paneId, entryName) {
+        this.setActivePane(paneId);
+        const pane = this.panes[paneId];
+        const entry = pane.entries.find(e => e.name === entryName);
+        if (!entry) return;
+
+        if (entry.kind === 'directory') {
+          pane.adapter = await pane.adapter.getChildAdapter(entry.name);
+          pane.selected.clear();
+          pane.lastSelectedIndex = -1;
+          pane.filter = '';
+          await this.refreshPane(paneId);
+        } else {
+          // Focus inspector preview
+          if (!this.inspectorVisible) this.toggleInspector();
+          this.updateInspector(true);
+        }
+      }
+
+      // Selection Handling (Single, Ctrl, Shift, Checkbox)
+      handleRowClick(event, paneId, index, entryName) {
+        event.stopPropagation();
+        this.setActivePane(paneId);
+        const pane = this.panes[paneId];
+        const visibleEntries = this.getFilteredEntries(paneId);
+
+        if (event.shiftKey && pane.lastSelectedIndex !== -1) {
+          const start = Math.min(pane.lastSelectedIndex, index);
+          const end = Math.max(pane.lastSelectedIndex, index);
+          if (!event.ctrlKey && !event.metaKey) pane.selected.clear();
+          for (let i = start; i <= end; i++) {
+            pane.selected.add(visibleEntries[i].name);
+          }
+        } else if (event.ctrlKey || event.metaKey) {
+          if (pane.selected.has(entryName)) {
+            pane.selected.delete(entryName);
+          } else {
+            pane.selected.add(entryName);
+          }
+          pane.lastSelectedIndex = index;
+        } else {
+          pane.selected.clear();
+          pane.selected.add(entryName);
+          pane.lastSelectedIndex = index;
+        }
+
+        this.renderPane(paneId);
+        this.updateInspector();
+      }
+
+      toggleCheckbox(event, paneId, index, entryName) {
+        event.stopPropagation();
+        this.setActivePane(paneId);
+        const pane = this.panes[paneId];
+        if (pane.selected.has(entryName)) {
+          pane.selected.delete(entryName);
+        } else {
+          pane.selected.add(entryName);
+        }
+        pane.lastSelectedIndex = index;
+        this.renderPane(paneId);
+        this.updateInspector();
+      }
+
+      toggleSelectAll(paneId) {
+        this.setActivePane(paneId);
+        const pane = this.panes[paneId];
+        const visible = this.getFilteredEntries(paneId);
+        if (visible.length === 0) return;
+
+        const allSelected = visible.every(e => pane.selected.has(e.name));
+        if (allSelected) {
+          visible.forEach(e => pane.selected.delete(e.name));
+        } else {
+          visible.forEach(e => pane.selected.add(e.name));
+        }
+        this.renderPane(paneId);
+        this.updateInspector();
+      }
+
+      // =====================================================================
+      // 5. CORE FILE OPERATIONS: COPY (F5), MOVE (F6), NEW FOLDER (F7), RENAME (F2), DELETE
+      // =====================================================================
+      getSelectedEntries(paneId = this.activePane) {
+        const pane = this.panes[paneId];
+        return pane.entries.filter(e => pane.selected.has(e.name));
+      }
+
+      async triggerCopy(srcPaneId = this.activePane, destPaneId = this.getOppositePaneId(srcPaneId)) {
+        const selected = this.getSelectedEntries(srcPaneId);
+        if (selected.length === 0) {
+          this.showToast('กรุณาเลือกไฟล์หรือโฟลเดอร์ที่ต้องการคัดลอกก่อน', 'warning');
+          return;
+        }
+        await this.executeTransfer('copy', srcPaneId, destPaneId, selected);
+      }
+
+      async triggerMove(srcPaneId = this.activePane, destPaneId = this.getOppositePaneId(srcPaneId)) {
+        const selected = this.getSelectedEntries(srcPaneId);
+        if (selected.length === 0) {
+          this.showToast('กรุณาเลือกไฟล์หรือโฟลเดอร์ที่ต้องการย้ายก่อน', 'warning');
+          return;
+        }
+        await this.executeTransfer('move', srcPaneId, destPaneId, selected);
+      }
+
+      async executeTransfer(mode, srcPaneId, destPaneId, items) {
+        const srcPane = this.panes[srcPaneId];
+        const destPane = this.panes[destPaneId];
+
+        // Prevent copying/moving into the exact same folder
+        const srcPathStr = srcPane.adapter.getBreadcrumbs().map(b => b.name).join('/');
+        const destPathStr = destPane.adapter.getBreadcrumbs().map(b => b.name).join('/');
+        if (srcPane.adapter.type === destPane.adapter.type && srcPathStr === destPathStr) {
+          this.showToast('โฟลเดอร์ต้นทางและปลายทางเป็นตำแหน่งเดียวกัน', 'warning');
+          return;
+        }
+
+        // Check for naming conflicts
+        const conflicts = [];
+        for (const item of items) {
+          if (await destPane.adapter.hasEntry(item.name)) {
+            conflicts.push(item.name);
+          }
+        }
+
+        let conflictStrategy = 'overwrite'; // 'overwrite' | 'skip' | 'rename'
+        if (conflicts.length > 0) {
+          conflictStrategy = await this.askConflictResolution(conflicts);
+          if (!conflictStrategy) return; // Cancelled
+        }
+
+        // Start Transfer Progress UI
+        const actionLabel = mode === 'copy' ? 'กำลังคัดลอก (Copying)' : 'กำลังย้าย (Moving)';
+        this.setProgressState(true, `${actionLabel}...`, 5);
+
+        let processed = 0;
+        const total = items.length;
+        let successCount = 0;
+
+        try {
+          for (const item of items) {
+            let targetName = item.name;
+            const exists = await destPane.adapter.hasEntry(targetName);
+
+            if (exists) {
+              if (conflictStrategy === 'skip') {
+                processed++;
+                this.setProgressState(true, `${actionLabel}: ข้าม ${item.name}`, Math.round((processed / total) * 100));
+                continue;
+              } else if (conflictStrategy === 'rename') {
+                targetName = await this.generateUniqueName(destPane.adapter, item.name);
+              }
+            }
+
+            this.setProgressState(true, `${actionLabel}: ${item.name}`, Math.round(((processed + 0.3) / total) * 100));
+            await copyEntryBetweenAdapters(srcPane.adapter, item, destPane.adapter, targetName);
+
+            if (mode === 'move') {
+              await srcPane.adapter.deleteEntry(item.name);
+            }
+
+            successCount++;
+            processed++;
+            this.setProgressState(true, `${actionLabel}: ${item.name}`, Math.round((processed / total) * 100));
+          }
+
+          if (mode === 'move') {
+            srcPane.selected.clear();
+          }
+
+          await Promise.all([this.refreshPane(srcPaneId), this.refreshPane(destPaneId)]);
+
+          const verbThai = mode === 'copy' ? 'คัดลอก' : 'ย้าย';
+          const summary = `${verbThai}สำเร็จ ${successCount} รายการ ไปยัง ${destPane.adapter.getBreadcrumbs().pop().name}`;
+          this.addLog(summary);
+          this.showToast(summary, 'success');
+        } catch (err) {
+          this.showToast(`เกิดข้อผิดพลาด: ${err.message}`, 'error');
+          this.addLog(`ข้อผิดพลาดระหว่าง${mode === 'copy' ? 'คัดลอก' : 'ย้าย'}: ${err.message}`);
+        } finally {
+          setTimeout(() => this.setProgressState(false), 600);
+        }
+      }
+
+      async generateUniqueName(adapter, originalName) {
+        const dotIdx = originalName.lastIndexOf('.');
+        const base = dotIdx > 0 ? originalName.slice(0, dotIdx) : originalName;
+        const ext = dotIdx > 0 ? originalName.slice(dotIdx) : '';
+        let counter = 1;
+        let candidate = `${base} (${counter})${ext}`;
+        while (await adapter.hasEntry(candidate)) {
+          counter++;
+          candidate = `${base} (${counter})${ext}`;
+        }
+        return candidate;
+      }
+
+      // =====================================================================
+      // 6. DRAG AND DROP BETWEEN PANES
+      // =====================================================================
+      handleDragStart(event, paneId, entryName) {
+        this.setActivePane(paneId);
+        const pane = this.panes[paneId];
+        if (!pane.selected.has(entryName)) {
+          pane.selected.clear();
+          pane.selected.add(entryName);
+          this.renderPane(paneId);
+        }
+        const selectedItems = this.getSelectedEntries(paneId);
+        this.dragPayload = {
+          sourcePaneId: paneId,
+          items: selectedItems
+        };
+        event.dataTransfer.effectAllowed = 'copyMove';
+        event.dataTransfer.setData('text/plain', JSON.stringify(selectedItems.map(i => i.name)));
+      }
+
+      handleDragOver(event, targetPaneId) {
+        event.preventDefault();
+        if (!this.dragPayload || this.dragPayload.sourcePaneId === targetPaneId) return;
+        event.dataTransfer.dropEffect = event.shiftKey ? 'move' : 'copy';
+        const el = document.getElementById(`pane-${targetPaneId}`);
+        el.classList.add('ring-2', 'ring-blue-500', 'ring-inset');
+      }
+
+      handleDragLeave(event, targetPaneId) {
+        const el = document.getElementById(`pane-${targetPaneId}`);
+        el.classList.remove('ring-2', 'ring-blue-500', 'ring-inset');
+      }
+
+      async handleDrop(event, targetPaneId) {
+        event.preventDefault();
+        const el = document.getElementById(`pane-${targetPaneId}`);
+        el.classList.remove('ring-2', 'ring-blue-500', 'ring-inset');
+
+        if (!this.dragPayload || this.dragPayload.sourcePaneId === targetPaneId) return;
+        const { sourcePaneId, items } = this.dragPayload;
+        this.dragPayload = null;
+
+        // If Shift key held during drop -> Move, otherwise ask or Copy
+        if (event.shiftKey) {
+          await this.executeTransfer('move', sourcePaneId, targetPaneId, items);
+        } else {
+          this.openDropChoiceModal(sourcePaneId, targetPaneId, items);
+        }
+      }
+
+      // =====================================================================
+      // 7. MODALS (NEW FOLDER, RENAME, DELETE, CONFLICT, DROP CHOICE, HELP)
+      // =====================================================================
+      showModal(htmlContent) {
+        const backdrop = document.getElementById('modal-backdrop');
+        const box = document.getElementById('modal-box');
+        box.innerHTML = htmlContent;
+        backdrop.classList.remove('hidden');
+      }
+
+      closeModal() {
+        document.getElementById('modal-backdrop').classList.add('hidden');
+      }
+
+      openNewFolderModal() {
+        const pane = this.panes[this.activePane];
+        this.showModal(`
+          <div class="p-5">
+            <h3 class="text-base font-bold text-slate-900 dark:text-white mb-1">สร้างโฟลเดอร์ใหม่ (New Folder)</h3>
+            <p class="text-xs text-slate-500 dark:text-slate-400 mb-4">ตำแหน่ง: ${escapeHTML(pane.adapter.getBreadcrumbs().map(b => b.name).join(' / '))}</p>
+            <input id="input-new-folder" type="text" value="New Folder" class="w-full px-3 py-2 text-sm rounded-xl border border-slate-300 dark:border-oc-border bg-slate-50 dark:bg-oc-surface text-slate-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-blue-500" />
+            <div class="flex justify-end gap-2 mt-5">
+              <button onclick="app.closeModal()" class="px-4 py-2 rounded-xl text-xs font-medium text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-oc-hover">ยกเลิก</button>
+              <button onclick="app.confirmNewFolder()" class="px-4 py-2 rounded-xl text-xs font-semibold bg-blue-600 hover:bg-blue-500 text-white shadow">สร้างโฟลเดอร์</button>
+            </div>
+          </div>
+        `);
+        setTimeout(() => {
+          const inp = document.getElementById('input-new-folder');
+          inp.focus();
+          inp.select();
+          inp.onkeydown = (e) => { if (e.key === 'Enter') this.confirmNewFolder(); };
+        }, 30);
+      }
+
+      async confirmNewFolder() {
+        const inp = document.getElementById('input-new-folder');
+        const name = inp.value.trim();
+        if (!name) return;
+        const pane = this.panes[this.activePane];
+        try {
+          await pane.adapter.createDirectory(name);
+          this.closeModal();
+          await this.refreshPane(this.activePane);
+          this.addLog(`สร้างโฟลเดอร์ "${name}"`);
+          this.showToast(`สร้างโฟลเดอร์ "${name}" สำเร็จ`, 'success');
+        } catch (err) {
+          this.showToast(err.message, 'error');
+        }
+      }
+
+      openRenameModal() {
+        const selected = this.getSelectedEntries(this.activePane);
+        if (selected.length !== 1) {
+          this.showToast('กรุณาเลือกไฟล์หรือโฟลเดอร์ 1 รายการเพื่อเปลี่ยนชื่อ', 'warning');
+          return;
+        }
+        const target = selected[0];
+        this.showModal(`
+          <div class="p-5">
+            <h3 class="text-base font-bold text-slate-900 dark:text-white mb-1">เปลี่ยนชื่อ (Rename)</h3>
+            <p class="text-xs text-slate-500 dark:text-slate-400 mb-4">ชื่อเดิม: ${escapeHTML(target.name)}</p>
+            <input id="input-rename" type="text" value="${escapeHTML(target.name)}" class="w-full px-3 py-2 text-sm rounded-xl border border-slate-300 dark:border-oc-border bg-slate-50 dark:bg-oc-surface text-slate-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-blue-500" />
+            <div class="flex justify-end gap-2 mt-5">
+              <button onclick="app.closeModal()" class="px-4 py-2 rounded-xl text-xs font-medium text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-oc-hover">ยกเลิก</button>
+              <button onclick="app.confirmRename('${escapeHTML(target.name).replace(/'/g, "\\'")}')" class="px-4 py-2 rounded-xl text-xs font-semibold bg-sky-600 hover:bg-sky-500 text-white shadow">บันทึกชื่อใหม่</button>
+            </div>
+          </div>
+        `);
+        setTimeout(() => {
+          const inp = document.getElementById('input-rename');
+          inp.focus();
+          const dotIdx = target.name.lastIndexOf('.');
+          if (target.kind === 'file' && dotIdx > 0) {
+            inp.setSelectionRange(0, dotIdx);
+          } else {
+            inp.select();
+          }
+          inp.onkeydown = (e) => { if (e.key === 'Enter') this.confirmRename(target.name); };
+        }, 30);
+      }
+
+      async confirmRename(oldName) {
+        const inp = document.getElementById('input-rename');
+        const newName = inp.value.trim();
+        if (!newName || newName === oldName) {
+          this.closeModal();
+          return;
+        }
+        const pane = this.panes[this.activePane];
+        try {
+          await pane.adapter.renameEntry(oldName, newName);
+          pane.selected.clear();
+          pane.selected.add(newName);
+          this.closeModal();
+          await this.refreshPane(this.activePane);
+          this.addLog(`เปลี่ยนชื่อ "${oldName}" เป็น "${newName}"`);
+          this.showToast(`เปลี่ยนชื่อเป็น "${newName}" สำเร็จ`, 'success');
+        } catch (err) {
+          this.showToast(err.message, 'error');
+        }
+      }
+
+      openDeleteModal() {
+        const selected = this.getSelectedEntries(this.activePane);
+        if (selected.length === 0) {
+          this.showToast('กรุณาเลือกรายการที่ต้องการลบก่อน', 'warning');
+          return;
+        }
+        const listPreview = selected.slice(0, 5).map(i => `<li class="truncate">• ${escapeHTML(i.name)}</li>`).join('');
+        const moreText = selected.length > 5 ? `<li class="text-slate-400">...และอีก ${selected.length - 5} รายการ</li>` : '';
+
+        this.showModal(`
+          <div class="p-5">
+            <div class="flex items-center gap-3 text-rose-500 mb-3">
+              <div class="p-2.5 rounded-full bg-rose-500/10">
+                <svg class="w-6 h-6" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z"/></svg>
+              </div>
+              <div>
+                <h3 class="text-base font-bold text-slate-900 dark:text-white">ยืนยันการลบข้อมูล (${selected.length} รายการ)</h3>
+                <p class="text-xs text-slate-500 dark:text-slate-400">การลบไฟล์บน PC Drive จะเป็นการลบถาวร</p>
+              </div>
+            </div>
+            <ul class="text-xs bg-slate-100 dark:bg-oc-surface p-3 rounded-xl space-y-1 text-slate-700 dark:text-slate-300 border border-slate-200 dark:border-oc-border">
+              ${listPreview}${moreText}
+            </ul>
+            <div class="flex justify-end gap-2 mt-5">
+              <button onclick="app.closeModal()" class="px-4 py-2 rounded-xl text-xs font-medium text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-oc-hover">ยกเลิก</button>
+              <button onclick="app.confirmDelete()" class="px-4 py-2 rounded-xl text-xs font-semibold bg-rose-600 hover:bg-rose-500 text-white shadow">ยืนยันการลบ</button>
+            </div>
+          </div>
+        `);
+      }
+
+      async confirmDelete() {
+        const pane = this.panes[this.activePane];
+        const selected = this.getSelectedEntries(this.activePane);
+        this.closeModal();
+        try {
+          for (const item of selected) {
+            await pane.adapter.deleteEntry(item.name);
+          }
+          pane.selected.clear();
+          await this.refreshPane(this.activePane);
+          this.addLog(`ลบข้อมูล ${selected.length} รายการ`);
+          this.showToast(`ลบข้อมูล ${selected.length} รายการเรียบร้อย`, 'success');
+        } catch (err) {
+          this.showToast(`ลบข้อมูลไม่สำเร็จ: ${err.message}`, 'error');
+        }
+      }
+
+      askConflictResolution(conflicts) {
+        return new Promise((resolve) => {
+          window._resolveConflict = (choice) => {
+            this.closeModal();
+            delete window._resolveConflict;
+            resolve(choice);
+          };
+          this.showModal(`
+            <div class="p-5">
+              <h3 class="text-base font-bold text-slate-900 dark:text-white mb-1">พบไฟล์ชื่อซ้ำในโฟลเดอร์ปลายทาง</h3>
+              <p class="text-xs text-slate-500 dark:text-slate-400 mb-3">พบ ${conflicts.length} รายการที่มีชื่อตรงกัน เช่น <span class="font-semibold text-amber-500">${escapeHTML(conflicts[0])}</span></p>
+              <div class="space-y-2">
+                <button onclick="window._resolveConflict('overwrite')" class="w-full text-left px-3.5 py-2.5 rounded-xl border border-slate-200 dark:border-oc-border hover:border-blue-500 bg-slate-50 dark:bg-oc-surface transition">
+                  <div class="text-xs font-semibold text-slate-900 dark:text-white">เขียนทับไฟล์เดิม (Overwrite)</div>
+                  <div class="text-[11px] text-slate-500">แทนที่ไฟล์ปลายทางด้วยไฟล์ใหม่ล่าสุด</div>
+                </button>
+                <button onclick="window._resolveConflict('rename')" class="w-full text-left px-3.5 py-2.5 rounded-xl border border-slate-200 dark:border-oc-border hover:border-blue-500 bg-slate-50 dark:bg-oc-surface transition">
+                  <div class="text-xs font-semibold text-slate-900 dark:text-white">เก็บไว้ทั้งคู่ (Keep Both / Auto-Rename)</div>
+                  <div class="text-[11px] text-slate-500">เปลี่ยนชื่อไฟล์ใหม่เป็นชื่อ (1) อัตโนมัติ</div>
+                </button>
+                <button onclick="window._resolveConflict('skip')" class="w-full text-left px-3.5 py-2.5 rounded-xl border border-slate-200 dark:border-oc-border hover:border-blue-500 bg-slate-50 dark:bg-oc-surface transition">
+                  <div class="text-xs font-semibold text-slate-900 dark:text-white">ข้ามไฟล์ที่ซ้ำ (Skip)</div>
+                  <div class="text-[11px] text-slate-500">คัดลอก/ย้ายเฉพาะไฟล์ที่ยังไม่มีอยู่</div>
+                </button>
+              </div>
+              <div class="flex justify-end mt-4">
+                <button onclick="window._resolveConflict(null)" class="px-4 py-1.5 rounded-xl text-xs font-medium text-slate-500 hover:text-slate-800 dark:hover:text-white">ยกเลิกทั้งหมด</button>
+              </div>
+            </div>
+          `);
+        });
+      }
+
+      openDropChoiceModal(srcPaneId, destPaneId, items) {
+        window._execDrop = (mode) => {
+          this.closeModal();
+          delete window._execDrop;
+          this.executeTransfer(mode, srcPaneId, destPaneId, items);
+        };
+        this.showModal(`
+          <div class="p-5">
+            <h3 class="text-base font-bold text-slate-900 dark:text-white mb-1">ดำเนินการกับไฟล์ที่ลากมา (${items.length} รายการ)</h3>
+            <p class="text-xs text-slate-500 dark:text-slate-400 mb-4">เลือกการดำเนินการที่ต้องการ (เคล็ดลับ: กด Shift ค้างขณะลากเพื่อ Move ทันที)</p>
+            <div class="grid grid-cols-2 gap-3">
+              <button onclick="window._execDrop('copy')" class="flex flex-col items-center gap-1.5 p-4 rounded-xl bg-blue-600 hover:bg-blue-500 text-white font-semibold text-xs shadow transition">
+                <svg class="w-6 h-6" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M8 7v8a2 2 0 002 2h6M8 7V5a2 2 0 012-2h4.586a1 1 0 01.707.293l4.414 4.414a1 1 0 01.293.707V15a2 2 0 01-2 2h-2M8 7H6a2 2 0 00-2 2v10a2 2 0 002 2h8a2 2 0 002-2v-2"/></svg>
+                <span>Copy (คัดลอก)</span>
+              </button>
+              <button onclick="window._execDrop('move')" class="flex flex-col items-center gap-1.5 p-4 rounded-xl bg-amber-600 hover:bg-amber-500 text-white font-semibold text-xs shadow transition">
+                <svg class="w-6 h-6" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M13 5l7 7-7 7M5 5l7 7-7 7"/></svg>
+                <span>Move (ย้ายไฟล์)</span>
+              </button>
+            </div>
+            <button onclick="app.closeModal()" class="w-full mt-3 py-2 text-xs text-slate-500 hover:text-slate-800 dark:hover:text-white">ยกเลิก</button>
+          </div>
+        `);
+      }
+
+      showAlertModal(title, message) {
+        this.showModal(`
+          <div class="p-5">
+            <h3 class="text-base font-bold text-slate-900 dark:text-white mb-2">${escapeHTML(title)}</h3>
+            <p class="text-xs text-slate-600 dark:text-slate-300 whitespace-pre-line leading-relaxed mb-5">${escapeHTML(message)}</p>
+            <div class="flex justify-end">
+              <button onclick="app.closeModal()" class="px-4 py-2 rounded-xl text-xs font-semibold bg-blue-600 hover:bg-blue-500 text-white">เข้าใจแล้ว</button>
+            </div>
+          </div>
+        `);
+      }
+
+      openHelpModal() {
+        this.showModal(`
+          <div class="p-5">
+            <div class="flex items-center justify-between mb-3">
+              <h3 class="text-base font-bold text-slate-900 dark:text-white">คีย์ลัดและฟีเจอร์เด่น (CommanderWeb)</h3>
+              <button onclick="app.closeModal()" class="text-slate-400 hover:text-white">&times;</button>
+            </div>
+            <div class="space-y-2 text-xs text-slate-600 dark:text-slate-300">
+              <div class="flex justify-between py-1.5 border-b border-slate-200 dark:border-oc-border">
+                <span>คัดลอกไฟล์ไปอีกหน้าต่าง (Copy)</span>
+                <kbd class="px-2 py-0.5 rounded bg-slate-200 dark:bg-oc-surface font-mono font-semibold">F5</kbd>
+              </div>
+              <div class="flex justify-between py-1.5 border-b border-slate-200 dark:border-oc-border">
+                <span>ย้ายไฟล์ไปอีกหน้าต่าง (Move)</span>
+                <kbd class="px-2 py-0.5 rounded bg-slate-200 dark:bg-oc-surface font-mono font-semibold">F6</kbd>
+              </div>
+              <div class="flex justify-between py-1.5 border-b border-slate-200 dark:border-oc-border">
+                <span>สร้างโฟลเดอร์ใหม่ (New Folder)</span>
+                <kbd class="px-2 py-0.5 rounded bg-slate-200 dark:bg-oc-surface font-mono font-semibold">F7</kbd>
+              </div>
+              <div class="flex justify-between py-1.5 border-b border-slate-200 dark:border-oc-border">
+                <span>เปลี่ยนชื่อไฟล์/โฟลเดอร์ (Rename)</span>
+                <kbd class="px-2 py-0.5 rounded bg-slate-200 dark:bg-oc-surface font-mono font-semibold">F2</kbd>
+              </div>
+              <div class="flex justify-between py-1.5 border-b border-slate-200 dark:border-oc-border">
+                <span>สลับหน้าต่าง ซ้าย ↔ ขวา</span>
+                <kbd class="px-2 py-0.5 rounded bg-slate-200 dark:bg-oc-surface font-mono font-semibold">Tab</kbd>
+              </div>
+              <div class="flex justify-between py-1.5">
+                <span>ลบไฟล์ที่เลือก (Delete)</span>
+                <kbd class="px-2 py-0.5 rounded bg-slate-200 dark:bg-oc-surface font-mono font-semibold">Delete</kbd>
+              </div>
+            </div>
+            <div class="mt-4 p-3 rounded-xl bg-blue-500/10 border border-blue-500/20 text-[11px] text-blue-600 dark:text-blue-300">
+              <strong>วิธีจัดการไฟล์ในเครื่องจริง:</strong> คลิกปุ่ม <span class="underline font-semibold">Open PC Folder</span> ที่หัวหน้าต่างซ้ายหรือขวา เพื่อเลือกโฟลเดอร์จาก Hard Drive ของคุณ แล้ว Copy/Move ข้ามไดรฟ์ได้ทันที!
+            </div>
+            <div class="flex justify-end mt-4">
+              <button onclick="app.closeModal()" class="px-4 py-2 rounded-xl text-xs font-semibold bg-blue-600 text-white">ปิดหน้าต่าง</button>
+            </div>
+          </div>
+        `);
+      }
+
+      // =====================================================================
+      // 8. UI RENDERING (PANES, INSPECTOR, LOGS, TOASTS)
+      // =====================================================================
+      renderPane(paneId) {
+        const pane = this.panes[paneId];
+        const container = document.getElementById(`pane-${paneId}`);
+        const isActive = this.activePane === paneId;
+        const breadcrumbs = pane.adapter.getBreadcrumbs();
+        const visibleEntries = this.getFilteredEntries(paneId);
+        const isLocal = pane.adapter.type === 'local';
+
+        const totalSize = visibleEntries.reduce((acc, e) => acc + (e.kind === 'file' ? e.size : 0), 0);
+        const selectedCount = pane.selected.size;
+        const allSelected = visibleEntries.length > 0 && visibleEntries.every(e => pane.selected.has(e.name));
+
+        const sortArrow = (col) => {
+          if (pane.sortBy !== col) return '';
+          return pane.sortAsc ? ' ▲' : ' ▼';
+        };
+
+        container.className = `flex-1 min-w-0 flex flex-col bg-white dark:bg-oc-surface transition-all relative ${
+          isActive
+            ? 'ring-2 ring-inset ring-blue-500/70'
+            : 'opacity-95'
+        }`;
+
+        container.innerHTML = `
+          <!-- PANE HEADER: DRIVE SOURCE & QUICK MOUNT -->
+          <div class="px-3 py-2 border-b border-slate-200 dark:border-oc-border bg-slate-50/80 dark:bg-oc-panel/60 flex items-center justify-between gap-2 shrink-0">
+            <div class="flex items-center gap-1.5 min-w-0">
+              <span class="w-2.5 h-2.5 rounded-full shrink-0 ${isActive ? 'bg-blue-500 shadow-[0_0_8px_#3b82f6]' : 'bg-slate-400 dark:bg-slate-600'}"></span>
+              <span class="text-[11px] font-bold uppercase tracking-wider ${isActive ? 'text-blue-600 dark:text-blue-400' : 'text-slate-500'}">
+                ${paneId === 'left' ? 'Left Pane' : 'Right Pane'}
+              </span>
+              <span class="text-[10px] px-1.5 py-0.5 rounded-md font-medium ${
+                isLocal
+                  ? 'bg-emerald-500/15 text-emerald-600 dark:text-emerald-400 border border-emerald-500/30'
+                  : 'bg-purple-500/15 text-purple-600 dark:text-purple-400 border border-purple-500/30'
+              }">
+                ${isLocal ? 'PC Local Drive' : 'Virtual Sandbox'}
+              </span>
+            </div>
+
+            <div class="flex items-center gap-1 shrink-0">
+              <button onclick="event.stopPropagation(); app.mountLocalFolder('${paneId}')" title="เลือกโฟลเดอร์จริงจากเครื่องคอมพิวเตอร์" class="flex items-center gap-1 px-2 py-1 rounded-lg text-[11px] font-semibold bg-emerald-600 hover:bg-emerald-500 text-white shadow-xs transition">
+                <svg class="w-3 h-3" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M5 19a2 2 0 01-2-2V7a2 2 0 012-2h4l2 2h4a2 2 0 012 2v1M5 19h14a2 2 0 002-2v-5a2 2 0 00-2-2H9a2 2 0 00-2 2v5a2 2 0 01-2 2z"/></svg>
+                <span>Open PC Folder</span>
+              </button>
+              ${isLocal ? `
+                <button onclick="event.stopPropagation(); app.switchToVirtualDrive('${paneId}')" title="สลับกลับไปใช้ Virtual Drive" class="px-2 py-1 rounded-lg text-[11px] font-medium bg-slate-200 dark:bg-oc-surface hover:bg-slate-300 dark:hover:bg-oc-hover text-slate-700 dark:text-slate-300 transition">
+                  V: Drive
+                </button>
+              ` : ''}
+            </div>
+          </div>
+
+          <!-- BREADCRUMB & FILTER BAR -->
+          <div class="px-2.5 py-1.5 border-b border-slate-200 dark:border-oc-border flex items-center gap-1.5 bg-white dark:bg-oc-surface shrink-0">
+            <button onclick="event.stopPropagation(); app.navigateUp('${paneId}')" ${breadcrumbs.length <= 1 ? 'disabled' : ''} title="ขึ้นไป 1 โฟลเดอร์ (Backspace)" class="p-1.5 rounded-lg text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-oc-hover disabled:opacity-30 transition">
+              <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M5 10l7-7m0 0l7 7m-7-7v18"/></svg>
+            </button>
+
+            <!-- Breadcrumb Path -->
+            <div class="flex-1 flex items-center gap-1 overflow-x-auto bg-slate-100 dark:bg-oc-panel px-2.5 py-1 rounded-lg border border-slate-200/80 dark:border-oc-border text-xs no-scrollbar">
+              ${breadcrumbs.map((crumb, idx) => `
+                ${idx > 0 ? '<span class="text-slate-400">/</span>' : ''}
+                <button onclick="event.stopPropagation(); app.navigateBreadcrumb('${paneId}', ${idx})" class="hover:text-blue-500 font-medium whitespace-nowrap transition ${idx === breadcrumbs.length - 1 ? 'text-slate-900 dark:text-white font-semibold' : 'text-slate-500 dark:text-slate-400'}">
+                  ${escapeHTML(crumb.name)}
+                </button>
+              `).join('')}
+            </div>
+
+            <!-- Quick Search Filter -->
+            <div class="relative w-28 sm:w-36 shrink-0">
+              <input
+                type="text"
+                value="${escapeHTML(pane.filter)}"
+                oninput="app.setFilter('${paneId}', this.value)"
+                onclick="event.stopPropagation(); app.setActivePane('${paneId}')"
+                placeholder="กรองชื่อ..."
+                class="w-full pl-6 pr-2 py-1 text-xs rounded-lg bg-slate-100 dark:bg-oc-panel border border-slate-200 dark:border-oc-border text-slate-800 dark:text-slate-200 focus:outline-none focus:border-blue-500"
+              />
+              <svg class="w-3 h-3 text-slate-400 absolute left-2 top-2" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"/></svg>
+            </div>
+
+            <button onclick="event.stopPropagation(); app.refreshPane('${paneId}')" title="รีเฟรชรายการไฟล์" class="p-1.5 rounded-lg text-slate-500 hover:text-slate-800 dark:hover:text-white hover:bg-slate-100 dark:hover:bg-oc-hover transition">
+              <svg class="w-3.5 h-3.5 ${pane.loading ? 'animate-spin text-blue-500' : ''}" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"/></svg>
+            </button>
+          </div>
+
+          <!-- FILE LIST TABLE HEADER -->
+          <div class="grid grid-cols-12 gap-2 px-3 py-1.5 border-b border-slate-200 dark:border-oc-border bg-slate-50 dark:bg-oc-panel/40 text-[11px] font-semibold text-slate-500 dark:text-slate-400 no-select shrink-0">
+            <div class="col-span-6 sm:col-span-6 flex items-center gap-2">
+              <input type="checkbox" ${allSelected ? 'checked' : ''} onclick="event.stopPropagation(); app.toggleSelectAll('${paneId}')" class="rounded border-slate-400 text-blue-600 focus:ring-0 cursor-pointer" />
+              <button onclick="event.stopPropagation(); app.toggleSort('${paneId}', 'name')" class="hover:text-slate-900 dark:hover:text-white truncate text-left">
+                ชื่อ (Name)${sortArrow('name')}
+              </button>
+            </div>
+            <div class="col-span-2 text-right">
+              <button onclick="event.stopPropagation(); app.toggleSort('${paneId}', 'size')" class="hover:text-slate-900 dark:hover:text-white">
+                ขนาด${sortArrow('size')}
+              </button>
+            </div>
+            <div class="col-span-2 hidden sm:block">
+              <button onclick="event.stopPropagation(); app.toggleSort('${paneId}', 'type')" class="hover:text-slate-900 dark:hover:text-white">
+                ประเภท${sortArrow('type')}
+              </button>
+            </div>
+            <div class="col-span-4 sm:col-span-2 text-right">
+              <button onclick="event.stopPropagation(); app.toggleSort('${paneId}', 'date')" class="hover:text-slate-900 dark:hover:text-white">
+                แก้ไขล่าสุด${sortArrow('date')}
+              </button>
+            </div>
+          </div>
+
+          <!-- FILE LIST ROWS (DROP ZONE) -->
+          <div
+            ondragover="app.handleDragOver(event, '${paneId}')"
+            ondragleave="app.handleDragLeave(event, '${paneId}')"
+            ondrop="app.handleDrop(event, '${paneId}')"
+            class="flex-1 overflow-y-auto divide-y divide-slate-100 dark:divide-oc-border/50 no-select"
+          >
+            ${visibleEntries.length === 0 ? `
+              <div class="h-full flex flex-col items-center justify-center text-slate-400 p-6 text-center">
+                <svg class="w-10 h-10 mb-2 opacity-40" fill="none" stroke="currentColor" stroke-width="1.5" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M3 7v10a2 2 0 002 2h14a2 2 0 002-2V9a2 2 0 00-2-2h-6l-2-2H5a2 2 0 00-2 2z"/></svg>
+                <p class="text-xs font-medium">${pane.filter ? 'ไม่พบไฟล์ที่ตรงกับคำค้นหา' : 'โฟลเดอร์นี้ว่างเปล่า'}</p>
+                <p class="text-[11px] opacity-75 mt-1">ลากไฟล์จากอีกฝั่งมาวางที่นี่ หรือกด F7 เพื่อสร้างโฟลเดอร์</p>
+              </div>
+            ` : visibleEntries.map((entry, idx) => {
+              const isSelected = pane.selected.has(entry.name);
+              const safeName = escapeHTML(entry.name);
+              const jsSafeName = entry.name.replace(/\\/g, '\\\\').replace(/'/g, "\\'");
+              return `
+                <div
+                  draggable="true"
+                  ondragstart="app.handleDragStart(event, '${paneId}', '${jsSafeName}')"
+                  onclick="app.handleRowClick(event, '${paneId}', ${idx}, '${jsSafeName}')"
+                  ondblclick="app.openEntry('${paneId}', '${jsSafeName}')"
+                  class="grid grid-cols-12 gap-2 px-3 py-1.5 items-center text-xs cursor-pointer transition-colors ${
+                    isSelected
+                      ? 'bg-blue-600/15 dark:bg-blue-500/25 text-blue-900 dark:text-white font-medium'
+                      : 'hover:bg-slate-100 dark:hover:bg-oc-hover text-slate-700 dark:text-slate-200'
+                  }"
+                >
+                  <div class="col-span-6 sm:col-span-6 flex items-center gap-2 min-w-0">
+                    <input
+                      type="checkbox"
+                      ${isSelected ? 'checked' : ''}
+                      onclick="app.toggleCheckbox(event, '${paneId}', ${idx}, '${jsSafeName}')"
+                      class="rounded border-slate-400 text-blue-600 focus:ring-0 cursor-pointer shrink-0"
+                    />
+                    ${getFileIconSVG(entry)}
+                    <span class="truncate" title="${safeName}">${safeName}</span>
+                  </div>
+                  <div class="col-span-2 text-right font-mono text-[11px] text-slate-500 dark:text-slate-400">
+                    ${entry.kind === 'directory' ? '<DIR>' : formatBytes(entry.size)}
+                  </div>
+                  <div class="col-span-2 hidden sm:block text-[11px] text-slate-500 dark:text-slate-400 truncate">
+                    ${getFileExtensionLabel(entry)}
+                  </div>
+                  <div class="col-span-4 sm:col-span-2 text-right text-[11px] text-slate-500 dark:text-slate-400 truncate">
+                    ${formatDate(entry.lastModified)}
+                  </div>
+                </div>
+              `;
+            }).join('')}
+          </div>
+
+          <!-- PANE FOOTER STATUS -->
+          <div class="px-3 py-1.5 border-t border-slate-200 dark:border-oc-border bg-slate-50 dark:bg-oc-panel/50 flex items-center justify-between text-[11px] text-slate-500 dark:text-slate-400 shrink-0">
+            <span>ทั้งหมด ${visibleEntries.length} รายการ (${formatBytes(totalSize)})</span>
+            <span class="${selectedCount > 0 ? 'text-blue-600 dark:text-blue-400 font-semibold' : ''}">
+              เลือกอยู่ ${selectedCount} รายการ
+            </span>
+          </div>
+        `;
+      }
+
+      async updateInspector() {
+        const container = document.getElementById('inspector-content');
+        if (!this.inspectorVisible) return;
+
+        const pane = this.panes[this.activePane];
+        const selected = this.getSelectedEntries(this.activePane);
+
+        if (selected.length === 0) {
+          const crumbs = pane.adapter.getBreadcrumbs();
+          const currentFolderName = crumbs[crumbs.length - 1].name;
+          const dirCount = pane.entries.filter(e => e.kind === 'directory').length;
+          const fileCount = pane.entries.filter(e => e.kind === 'file').length;
+          container.innerHTML = `
+            <div class="flex flex-col items-center text-center py-6">
+              <div class="w-16 h-16 rounded-2xl bg-amber-500/10 border border-amber-500/20 flex items-center justify-center text-amber-400 mb-3">
+                <svg class="w-9 h-9" fill="currentColor" viewBox="0 0 20 20"><path d="M2 6a2 2 0 012-2h5l2 2h5a2 2 0 012 2v6a2 2 0 01-2 2H4a2 2 0 01-2-2V6z"/></svg>
+              </div>
+              <h3 class="text-sm font-bold text-slate-900 dark:text-white break-all">${escapeHTML(currentFolderName)}</h3>
+              <p class="text-xs text-slate-500 dark:text-slate-400 mt-1">${dirCount} โฟลเดอร์ • ${fileCount} ไฟล์</p>
+            </div>
+            <div class="p-3.5 rounded-xl bg-white dark:bg-oc-surface border border-slate-200 dark:border-oc-border text-xs space-y-2">
+              <div class="font-semibold text-slate-700 dark:text-slate-200">คำแนะนำการใช้งาน</div>
+              <p class="text-[11px] text-slate-500 dark:text-slate-400 leading-relaxed">
+                คลิกเลือกไฟล์ทางฝั่งซ้ายหรือขวาเพื่อดูตัวอย่างรูปภาพ โค้ด หรือข้อความ และสามารถกด <strong>Copy (F5)</strong> หรือ <strong>Move (F6)</strong> เพื่อส่งไฟล์ข้ามหน้าต่างได้ทันที
+              </p>
+            </div>
+          `;
+          return;
+        }
+
+        if (selected.length > 1) {
+          const totalBytes = selected.reduce((sum, item) => sum + item.size, 0);
+          container.innerHTML = `
+            <div class="flex flex-col items-center text-center py-6">
+              <div class="w-16 h-16 rounded-2xl bg-blue-500/10 border border-blue-500/20 flex items-center justify-center text-blue-500 mb-3">
+                <svg class="w-8 h-8" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M8 7v8a2 2 0 002 2h6M8 7V5a2 2 0 012-2h4.586a1 1 0 01.707.293l4.414 4.414a1 1 0 01.293.707V15a2 2 0 01-2 2h-2M8 7H6a2 2 0 00-2 2v10a2 2 0 002 2h8a2 2 0 002-2v-2"/></svg>
+              </div>
+              <h3 class="text-sm font-bold text-slate-900 dark:text-white">เลือกอยู่ ${selected.length} รายการ</h3>
+              <p class="text-xs text-slate-500 dark:text-slate-400 mt-1">ขนาดรวม: ${formatBytes(totalBytes)}</p>
+            </div>
+            <div class="grid grid-cols-2 gap-2">
+              <button onclick="app.triggerCopy()" class="py-2 px-3 rounded-xl bg-blue-600 hover:bg-blue-500 text-white text-xs font-semibold shadow">Copy ทั้งหมด (F5)</button>
+              <button onclick="app.triggerMove()" class="py-2 px-3 rounded-xl bg-amber-600 hover:bg-amber-500 text-white text-xs font-semibold shadow">Move ทั้งหมด (F6)</button>
+            </div>
+          `;
+          return;
+        }
+
+        // Single item selected
+        const item = selected[0];
+        let previewHTML = '';
+
+        if (item.kind === 'directory') {
+          previewHTML = `
+            <div class="h-36 rounded-xl bg-amber-500/10 border border-amber-500/20 flex flex-col items-center justify-center text-amber-400">
+              <svg class="w-14 h-14" fill="currentColor" viewBox="0 0 20 20"><path d="M2 6a2 2 0 012-2h5l2 2h5a2 2 0 012 2v6a2 2 0 01-2 2H4a2 2 0 01-2-2V6z"/></svg>
+              <span class="text-[11px] font-medium mt-1">Directory / Folder</span>
+            </div>
+          `;
+        } else {
+          try {
+            const blob = await pane.adapter.readFileBlob(item);
+            const mime = item.mimeType || blob.type || guessMimeType(item.name);
+
+            if (mime.startsWith('image/')) {
+              const url = URL.createObjectURL(blob);
+              previewHTML = `
+                <div class="rounded-xl overflow-hidden border border-slate-200 dark:border-oc-border bg-slate-900/50 flex items-center justify-center p-2">
+                  <img src="${url}" alt="${escapeHTML(item.name)}" class="max-h-52 w-auto object-contain rounded-lg" />
+                </div>
+              `;
+            } else if (
+              mime.startsWith('text/') ||
+              mime === 'application/json' ||
+              item.name.match(/\.(txt|md|json|js|ts|html|css|csv|xml|py|java|cpp|log)$/i)
+            ) {
+              const text = await blob.slice(0, 6000).text();
+              previewHTML = `
+                <div class="rounded-xl border border-slate-200 dark:border-oc-border bg-slate-900 text-slate-200 p-3 font-mono text-[11px] max-h-60 overflow-auto whitespace-pre-wrap leading-relaxed">${escapeHTML(text)}</div>
+              `;
+            } else {
+              previewHTML = `
+                <div class="h-32 rounded-xl bg-slate-200/50 dark:bg-oc-surface border border-slate-200 dark:border-oc-border flex flex-col items-center justify-center text-slate-400">
+                  ${getFileIconSVG(item)}
+                  <span class="text-[11px] mt-2">ไม่มีตัวอย่างสำหรับไฟล์ประเภทนี้</span>
+                </div>
+              `;
+            }
+          } catch (e) {
+            previewHTML = `<div class="text-xs text-rose-400 p-3 rounded-xl bg-rose-500/10">ไม่สามารถอ่านตัวอย่างไฟล์ได้</div>`;
+          }
+        }
+
+        container.innerHTML = `
+          ${previewHTML}
+          <div>
+            <h3 class="text-sm font-bold text-slate-900 dark:text-white break-all">${escapeHTML(item.name)}</h3>
+            <p class="text-[11px] text-slate-500 dark:text-slate-400 mt-0.5">${getFileExtensionLabel(item)}</p>
+          </div>
+          <div class="rounded-xl bg-white dark:bg-oc-surface border border-slate-200 dark:border-oc-border p-3 text-xs space-y-2">
+            <div class="flex justify-between">
+              <span class="text-slate-500">ขนาดไฟล์:</span>
+              <span class="font-mono font-medium text-slate-800 dark:text-slate-200">${item.kind === 'directory' ? 'Folder' : formatBytes(item.size)}</span>
+            </div>
+            <div class="flex justify-between">
+              <span class="text-slate-500">แก้ไขล่าสุด:</span>
+              <span class="text-slate-800 dark:text-slate-200">${formatDate(item.lastModified)}</span>
+            </div>
+            <div class="flex justify-between">
+              <span class="text-slate-500">แหล่งข้อมูล:</span>
+              <span class="text-slate-800 dark:text-slate-200">${pane.adapter.type === 'local' ? 'PC Local Drive' : 'Virtual Drive'}</span>
+            </div>
+          </div>
+          <div class="grid grid-cols-2 gap-2 pt-1">
+            <button onclick="app.triggerCopy()" class="py-2 px-3 rounded-xl bg-blue-600 hover:bg-blue-500 text-white text-xs font-semibold shadow transition">Copy (F5)</button>
+            <button onclick="app.triggerMove()" class="py-2 px-3 rounded-xl bg-amber-600 hover:bg-amber-500 text-white text-xs font-semibold shadow transition">Move (F6)</button>
+          </div>
+        `;
+      }
+
+      swapPanes() {
+        const temp = this.panes.left;
+        this.panes.left = this.panes.right;
+        this.panes.right = temp;
+        this.panes.left.id = 'left';
+        this.panes.right.id = 'right';
+        this.activePane = this.getOppositePaneId(this.activePane);
+        this.renderPane('left');
+        this.renderPane('right');
+        this.updateInspector();
+        this.showToast('สลับตำแหน่งหน้าต่างซ้าย-ขวาแล้ว', 'info');
+      }
+
+      toggleInspector() {
+        this.inspectorVisible = !this.inspectorVisible;
+        const panel = document.getElementById('inspector-panel');
+        if (this.inspectorVisible) {
+          panel.classList.remove('hidden');
+          this.updateInspector();
+        } else {
+          panel.classList.add('hidden');
+        }
+      }
+
+      toggleTheme() {
+        document.documentElement.classList.toggle('dark');
+      }
+
+      setProgressState(active, label = '', percent = 0) {
+        const indicator = document.getElementById('task-status-indicator');
+        const wrapper = document.getElementById('task-progress-wrapper');
+        const bar = document.getElementById('task-progress-bar');
+        const text = document.getElementById('task-progress-text');
+
+        if (active) {
+          indicator.innerHTML = `<span class="w-2 h-2 rounded-full bg-blue-500 animate-ping"></span><span>${escapeHTML(label)}</span>`;
+          wrapper.classList.remove('hidden');
+          wrapper.classList.add('flex');
+          bar.style.width = `${percent}%`;
+          text.textContent = `${percent}%`;
+        } else {
+          indicator.innerHTML = `<span class="w-2 h-2 rounded-full bg-emerald-500"></span><span>พร้อมทำงาน (Ready)</span>`;
+          wrapper.classList.add('hidden');
+          wrapper.classList.remove('flex');
+        }
+      }
+
+      addLog(message) {
+        const time = new Date().toLocaleTimeString('th-TH');
+        this.logs.unshift(`[${time}] ${message}`);
+        document.getElementById('log-count').textContent = this.logs.length;
+        document.getElementById('task-last-log').textContent = message;
+        const panel = document.getElementById('task-logs-panel');
+        panel.innerHTML = this.logs.map(l => `<div class="text-slate-600 dark:text-slate-300">${escapeHTML(l)}</div>`).join('');
+      }
+
+      toggleTaskLogs() {
+        document.getElementById('task-logs-panel').classList.toggle('hidden');
+      }
+
+      showToast(message, type = 'info') {
+        const container = document.getElementById('toast-container');
+        const colors = {
+          success: 'bg-emerald-600 text-white',
+          error: 'bg-rose-600 text-white',
+          warning: 'bg-amber-600 text-white',
+          info: 'bg-slate-800 text-white dark:bg-oc-panel border border-oc-border'
+        };
+        const toast = document.createElement('div');
+        toast.className = `px-4 py-2.5 rounded-xl shadow-lg text-xs font-medium animate-slide-up ${colors[type] || colors.info}`;
+        toast.textContent = message;
+        container.appendChild(toast);
+        setTimeout(() => {
+          toast.style.opacity = '0';
+          toast.style.transition = 'opacity 0.2s';
+          setTimeout(() => toast.remove(), 200);
+        }, 3200);
+      }
+
+      bindKeyboardShortcuts() {
+        window.addEventListener('keydown', (e) => {
+          // Ignore shortcuts when typing in input fields or when modal is open
+          const tag = document.activeElement.tagName;
+          const modalOpen = !document.getElementById('modal-backdrop').classList.contains('hidden');
+          if (modalOpen) {
+            if (e.key === 'Escape') this.closeModal();
+            return;
+          }
+          if (tag === 'INPUT' || tag === 'TEXTAREA') {
+            if (e.key === 'Escape') document.activeElement.blur();
+            return;
+          }
+
+          if (e.key === 'Tab') {
+            e.preventDefault();
+            this.setActivePane(this.getOppositePaneId());
+          } else if (e.key === 'F5') {
+            e.preventDefault();
+            this.triggerCopy();
+          } else if (e.key === 'F6') {
+            e.preventDefault();
+            this.triggerMove();
+          } else if (e.key === 'F7') {
+            e.preventDefault();
+            this.openNewFolderModal();
+          } else if (e.key === 'F2') {
+            e.preventDefault();
+            this.openRenameModal();
+          } else if (e.key === 'Delete') {
+            e.preventDefault();
+            this.openDeleteModal();
+          } else if (e.key === 'Backspace') {
+            e.preventDefault();
+            this.navigateUp(this.activePane);
+          } else if (e.key === 'Enter') {
+            const selected = this.getSelectedEntries(this.activePane);
+            if (selected.length === 1) {
+              this.openEntry(this.activePane, selected[0].name);
+            }
+          } else if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'a') {
+            e.preventDefault();
+            this.toggleSelectAll(this.activePane);
+          } else if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'u') {
+            e.preventDefault();
+            this.swapPanes();
+          }
+        });
+      }
+
+      bindResizer() {
+        const resizer = document.getElementById('pane-resizer');
+        const leftPane = document.getElementById('pane-left');
+        const rightPane = document.getElementById('pane-right');
+        const workspace = document.getElementById('workspace');
+        let isResizing = false;
+
+        resizer.addEventListener('mousedown', (e) => {
+          isResizing = true;
+          resizer.classList.add('resizing');
+          document.body.style.cursor = 'col-resize';
+        });
+
+        window.addEventListener('mousemove', (e) => {
+          if (!isResizing) return;
+          const rect = workspace.getBoundingClientRect();
+          const inspector = document.getElementById('inspector-panel');
+          const inspectorWidth = inspector.classList.contains('hidden') ? 0 : inspector.offsetWidth;
+          const availableWidth = rect.width - inspectorWidth - resizer.offsetWidth;
+          const offsetX = e.clientX - rect.left;
+          const leftPercent = Math.min(80, Math.max(20, (offsetX / availableWidth) * 100));
+
+          leftPane.style.flex = `0 0 ${leftPercent}%`;
+          rightPane.style.flex = `1 1 0%`;
+        });
+
+        window.addEventListener('mouseup', () => {
+          if (isResizing) {
+            isResizing = false;
+            resizer.classList.remove('resizing');
+            document.body.style.cursor = '';
+          }
+        });
+      }
+    }
+
+    // Boot application
+    const app = new CommanderApp();
+  </script>
+</body>
+</html>
