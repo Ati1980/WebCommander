@@ -150,13 +150,14 @@ export default function App() {
     saveVirtualRoot(virtualRootRef.current);
   }, []);
 
-  const [darkMode, setDarkMode] = useState(true);
+  const [darkMode, setDarkMode] = useState(false);
   const [layoutMode, setLayoutMode] = useState<LayoutMode>('dual');
   const [sidebarVisible, setSidebarVisible] = useState(true);
-  const [sidebarWidth, setSidebarWidth] = useState(240);
+  const [sidebarWidth, setSidebarWidth] = useState(248);
   const [inspectorVisible, setInspectorVisible] = useState(true);
   const [activePane, setActivePane] = useState<PaneId>('left');
   const [leftPaneRatio, setLeftPaneRatio] = useState(50);
+  const [mountedLocals, setMountedLocals] = useState<LocalFSAdapter[]>([]);
 
   const [paneTabs, setPaneTabs] = useState<Record<PaneId, TabState[]>>(() => {
     const leftAdapter = new VirtualFSAdapter(virtualRootRef.current, ['Documents'], persistVirtual);
@@ -190,9 +191,9 @@ export default function App() {
       // ignore
     }
     return [
-      { id: 'fav_docs', name: 'Documents', adapterType: 'virtual', path: ['Documents'] },
       { id: 'fav_proj', name: 'Projects', adapterType: 'virtual', path: ['Projects'] },
       { id: 'fav_media', name: 'Media_Assets', adapterType: 'virtual', path: ['Media_Assets'] },
+      { id: 'fav_backup', name: 'Backup_Archive', adapterType: 'virtual', path: ['Backup_Archive'] },
     ];
   });
 
@@ -477,6 +478,10 @@ export default function App() {
       try {
         const dirHandle = await picker({ mode: 'readwrite' });
         const localAdapter = new LocalFSAdapter(dirHandle);
+        setMountedLocals((prev) => {
+          const exists = prev.some((a) => a.getRootName() === localAdapter.getRootName());
+          return exists ? prev : [...prev, localAdapter];
+        });
         await navigateTabAdapter(paneId, localAdapter, true);
         addLog(`เชื่อมต่อโฟลเดอร์จริง "${dirHandle.name}" ที่ฝั่ง${paneId === 'left' ? 'ซ้าย' : 'ขวา'}`, 'success');
         showToast(`เชื่อมต่อโฟลเดอร์ "${dirHandle.name}" สำเร็จ`, 'success');
@@ -1497,14 +1502,20 @@ export default function App() {
         <Sidebar
           visible={sidebarVisible}
           width={sidebarWidth}
+          currentPathString={activeTab.adapter.getPathString()}
+          virtualRoot={virtualRootRef.current}
+          mountedLocals={mountedLocals}
           favorites={favorites}
           shelf={shelf}
           activeTagFilter={activeTagFilter}
           tagCounts={tagCounts}
           onToggleCollapse={() => setSidebarVisible((v) => !v)}
-          onOpenVirtualRoot={() => {
-            const v = new VirtualFSAdapter(virtualRootRef.current, [], persistVirtual);
+          onOpenVirtualPath={(path) => {
+            const v = new VirtualFSAdapter(virtualRootRef.current, path, persistVirtual);
             navigateTabAdapter(activePane, v, true);
+          }}
+          onOpenLocalAdapter={(localAdapter) => {
+            navigateTabAdapter(activePane, localAdapter, true);
           }}
           onOpenTrash={() => {
             const v = new VirtualFSAdapter(virtualRootRef.current, ['.Trash'], persistVirtual);

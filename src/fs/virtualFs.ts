@@ -21,6 +21,72 @@ export function createInitialVirtualRoot(): VirtualNode {
     kind: 'directory',
     lastModified: now - 86400000 * 7,
     children: {
+      Desktop: {
+        name: 'Desktop',
+        kind: 'directory',
+        lastModified: now - 86400000 * 1,
+        children: {
+          'Shortcut_Guide.txt': {
+            name: 'Shortcut_Guide.txt',
+            kind: 'file',
+            size: 280,
+            lastModified: now - 3600000 * 2,
+            mimeType: 'text/plain',
+            content: 'ทางลัดด่วนสำหรับงานบน Desktop:\n- F5: คัดลอกไปอีกฝั่ง\n- F6: ย้ายไปอีกฝั่ง\n- Ctrl+B: พับ/กางแถบด้านซ้าย\n- Space: Quick Look',
+          },
+        },
+      },
+      Downloads: {
+        name: 'Downloads',
+        kind: 'directory',
+        lastModified: now - 86400000 * 1,
+        children: {
+          'Installer_Notes.txt': {
+            name: 'Installer_Notes.txt',
+            kind: 'file',
+            size: 190,
+            lastModified: now - 3600000 * 6,
+            mimeType: 'text/plain',
+            content: 'รายการไฟล์ที่ดาวน์โหลดล่าสุด — สามารถลากไฟล์จากเครื่องมาวางในโฟลเดอร์นี้ได้ทันที',
+          },
+        },
+      },
+      Pictures: {
+        name: 'Pictures',
+        kind: 'directory',
+        lastModified: now - 86400000 * 2,
+        children: {
+          'Wallpaper_Sample.svg': {
+            name: 'Wallpaper_Sample.svg',
+            kind: 'file',
+            size: 460,
+            lastModified: now - 86400000 * 2,
+            mimeType: 'image/svg+xml',
+            content: `<svg xmlns="http://www.w3.org/2000/svg" width="480" height="260" viewBox="0 0 480 260"><rect width="480" height="260" fill="#e2e8f0"/><circle cx="380" cy="70" r="36" fill="#f59e0b"/><polygon points="0,260 150,115 310,260" fill="#64748b"/><polygon points="180,260 330,95 480,260" fill="#475569"/></svg>`,
+          },
+        },
+      },
+      Music: {
+        name: 'Music',
+        kind: 'directory',
+        lastModified: now - 86400000 * 3,
+        children: {
+          'Playlist_2026.txt': {
+            name: 'Playlist_2026.txt',
+            kind: 'file',
+            size: 140,
+            lastModified: now - 86400000 * 3,
+            mimeType: 'text/plain',
+            content: '1. Focus Ambient Mix\n2. Lo-Fi Coding Session\n3. Acoustic Morning',
+          },
+        },
+      },
+      Videos: {
+        name: 'Videos',
+        kind: 'directory',
+        lastModified: now - 86400000 * 3,
+        children: {},
+      },
       Documents: {
         name: 'Documents',
         kind: 'directory',
@@ -250,13 +316,11 @@ export function loadVirtualRoot(): VirtualNode {
     if (!raw) return createInitialVirtualRoot();
     const parsed = JSON.parse(raw) as VirtualNode;
     if (parsed && parsed.kind === 'directory' && parsed.children) {
-      if (!parsed.children['.Trash']) {
-        parsed.children['.Trash'] = {
-          name: '.Trash',
-          kind: 'directory',
-          lastModified: Date.now(),
-          children: {},
-        };
+      const defaults = createInitialVirtualRoot().children || {};
+      for (const reqDir of ['Desktop', 'Downloads', 'Pictures', 'Music', 'Videos', '.Trash']) {
+        if (!parsed.children[reqDir] && defaults[reqDir]) {
+          parsed.children[reqDir] = defaults[reqDir];
+        }
       }
       return parsed;
     }
