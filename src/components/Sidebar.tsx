@@ -24,17 +24,24 @@ import {
   Trash2,
   X,
 } from 'lucide-react';
+import { DriveSlotKey } from '../fs/driveHandlesDb';
 import { LocalFSAdapter } from '../fs/localFs';
 import { VirtualNode } from '../fs/virtualFs';
-import { ColorTag, FavoriteItem, ShelfItem } from '../types/files';
+import { ColorTag, FavoriteItem, FileEntry, ShelfItem } from '../types/files';
 import { COLOR_TAG_META } from '../utils/format';
 import { FileIcon } from './FileIcon';
+
+export interface DriveSlotState {
+  adapter: LocalFSAdapter | null;
+  hasSavedHandle: boolean;
+}
 
 interface SidebarProps {
   visible: boolean;
   width: number;
   currentPathString: string;
   virtualRoot: VirtualNode;
+  driveSlots: Record<DriveSlotKey, DriveSlotState>;
   mountedLocals: LocalFSAdapter[];
   favorites: FavoriteItem[];
   shelf: ShelfItem[];
@@ -42,6 +49,8 @@ interface SidebarProps {
   tagCounts: Record<Exclude<ColorTag, 'none'>, number>;
   onToggleCollapse: () => void;
   onOpenVirtualPath: (path: string[]) => void;
+  onOpenDriveSlot: (slot: DriveSlotKey) => void;
+  onUnlinkDriveSlot: (slot: DriveSlotKey) => void;
   onOpenLocalAdapter: (adapter: LocalFSAdapter) => void;
   onOpenTrash: () => void;
   onMountLocal: () => void;
@@ -98,6 +107,7 @@ export function Sidebar({
   width,
   currentPathString,
   virtualRoot,
+  driveSlots,
   mountedLocals,
   favorites,
   shelf,
@@ -105,6 +115,8 @@ export function Sidebar({
   tagCounts,
   onToggleCollapse,
   onOpenVirtualPath,
+  onOpenDriveSlot,
+  onUnlinkDriveSlot,
   onOpenLocalAdapter,
   onOpenTrash,
   onMountLocal,
@@ -119,6 +131,7 @@ export function Sidebar({
   onResetSandbox,
 }: SidebarProps) {
   const [shelfDragOver, setShelfDragOver] = useState(false);
+  const [driveSubdirs, setDriveSubdirs] = useState<Partial<Record<DriveSlotKey, FileEntry[]>>>({});
   const [expandedNodes, setExpandedNodes] = useState<Record<string, boolean>>({
     'this-pc': true,
     'cloud-v': false,
@@ -128,6 +141,26 @@ export function Sidebar({
 
   const toggleExpand = (key: string) => {
     setExpandedNodes((prev) => ({ ...prev, [key]: !prev[key] }));
+  };
+
+  const toggleDriveSlotExpand = async (slot: DriveSlotKey) => {
+    const key = `drive-${slot}`;
+    const nextOpen = !expandedNodes[key];
+    setExpandedNodes((prev) => ({ ...prev, [key]: nextOpen }));
+    const adapter = driveSlots[slot].adapter;
+    if (nextOpen && adapter) {
+      try {
+        const entries = await adapter.listEntries();
+        setDriveSubdirs((prev) => ({
+          ...prev,
+          [slot]: entries
+            .filter((e) => e.kind === 'directory')
+            .sort((a, b) => a.name.localeCompare(b.name)),
+        }));
+      } catch {
+        // ignore if permission not granted yet
+      }
+    }
   };
 
   const handleShelfDragOver = (e: React.DragEvent) => {
@@ -437,26 +470,132 @@ export function Sidebar({
           </button>
 
           {expandedNodes['this-pc'] && (
-            <div className="pl-4 space-y-0.5">
-              {/* Virtual Drive V: */}
-              <button
-                onClick={() => onOpenVirtualPath([])}
-                className={`w-full flex items-center gap-2 px-2 py-1.5 rounded-md text-xs transition-colors text-left ${
-                  currentPathString === 'V:/'
-                    ? 'bg-slate-200/80 dark:bg-[#232936] text-slate-900 dark:text-white font-medium'
-                    : 'text-slate-700 dark:text-slate-200 hover:bg-slate-100 dark:hover:bg-[#1c212b]'
-                }`}
-              >
-                <HardDrive className="w-4 h-4 text-slate-500 dark:text-slate-400 shrink-0" />
-                <span className="truncate">Virtual (V:)</span>
-              </button>
+            <div className="pl-3 space-y-0.5">
+              {/* Local Drive OS (C:) and DATA (D:) */}
+              {(['C', 'D'] as DriveSlotKey[]).map((slot) => {
+                const label = slot === 'C' ? 'OS (C:)' : 'DATA (D:)';
+                const slotState = driveSlots[slot];
+                const isConnected = Boolean(slotState.adapter);
+                const isCurrent = currentPathString.startsWith(label);
+                const isExp = Boolean(expandedNodes[`drive-${slot}`]);
+                const subdirs = driveSubdirs[slot] || [];
 
-              {/* Mounted Local PC Folders */}
+                return (
+                  <div key={slot}>
+                    <div
+                      className={`group flex items-center gap-1 pr-1 py-1 rounded-md text-xs transition-colors ${
+                        isCurrent
+                          ? 'bg-slate-200/80 dark:bg-[#232936] text-slate-900 dark:text-white font-medium'
+                          : 'text-slate-700 dark:text-slate-200 hover:bg-slate-100 dark:hover:bg-[#1c212b]'
+                      }`}
+                    >
+                      <button
+                        type="button"
+                        onClick={() => {
+                          if (isConnected) toggleDriveSlotExpand(slot);
+                          else onOpenDriveSlot(slot);
+                        }}
+                        className="w-4 h-4 flex items-center justify-center text-slate-400 hover:text-slate-700 dark:hover:text-white shrink-0"
+                      >
+                        {isExp ? (
+                          <ChevronDown className="w-3.5 h-3.5" />
+                        ) : (
+                          <ChevronRight className="w-3.5 h-3.5" />
+                        )}
+                      </button>
+
+                      <button
+                        type="button"
+                        onClick={() => onOpenDriveSlot(slot)}
+                        title={
+                          isConnected
+                            ? `เปิด ${label} (${slotState.adapter?.rootHandle.name})`
+                            : slotState.hasSavedHandle
+                              ? `คลิกเพื่อยืนยันสิทธิ์เข้าถึง ${label}`
+                              : `คลิกเพื่อเชื่อมต่อโฟลเดอร์เครื่องสำหรับ ${label}`
+                        }
+                        className="flex-1 flex items-center gap-2 min-w-0 text-left"
+                      >
+                        <HardDrive
+                          className={`w-4 h-4 shrink-0 ${
+                            isConnected
+                              ? 'text-sky-600 dark:text-sky-400'
+                              : 'text-slate-500 dark:text-slate-400'
+                          }`}
+                        />
+                        <span className="truncate">{label}</span>
+                      </button>
+
+                      {isConnected ? (
+                        <button
+                          type="button"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            onUnlinkDriveSlot(slot);
+                          }}
+                          title={`ยกเลิกการเชื่อมต่อ ${label}`}
+                          className="opacity-0 group-hover:opacity-100 p-0.5 text-slate-400 hover:text-rose-500 transition-opacity"
+                        >
+                          <X className="w-3 h-3" />
+                        </button>
+                      ) : (
+                        <span className="text-[10px] text-slate-400 opacity-0 group-hover:opacity-100 pr-1">
+                          เชื่อมต่อ
+                        </span>
+                      )}
+                    </div>
+
+                    {isExp && isConnected && slotState.adapter && (
+                      <div className="pl-5 space-y-0.5">
+                        {subdirs.length === 0 ? (
+                          <div className="px-2 py-1 text-[11px] text-slate-400">
+                            ไม่มีโฟลเดอร์ย่อย
+                          </div>
+                        ) : (
+                          subdirs.map((sub) => (
+                            <button
+                              key={sub.name}
+                              type="button"
+                              onClick={async () => {
+                                if (!slotState.adapter) return;
+                                const child = await slotState.adapter.getChildAdapter(sub.name);
+                                onOpenLocalAdapter(child as LocalFSAdapter);
+                              }}
+                              className="w-full flex items-center gap-2 px-2 py-1 rounded-md text-xs text-slate-700 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-[#1c212b] text-left"
+                            >
+                              <Folder className="w-3.5 h-3.5 text-amber-400 fill-amber-400/75 shrink-0" />
+                              <span className="truncate">{sub.name}</span>
+                            </button>
+                          ))
+                        )}
+                      </div>
+                    )}
+                  </div>
+                );
+              })}
+
+              {/* Virtual Drive V: */}
+              <div className="flex items-center gap-1 pr-1 py-1 rounded-md text-xs transition-colors">
+                <span className="w-4 h-4 shrink-0" />
+                <button
+                  onClick={() => onOpenVirtualPath([])}
+                  className={`flex-1 flex items-center gap-2 px-1.5 py-0.5 rounded-md text-xs transition-colors text-left ${
+                    currentPathString === 'V:/'
+                      ? 'bg-slate-200/80 dark:bg-[#232936] text-slate-900 dark:text-white font-medium'
+                      : 'text-slate-700 dark:text-slate-200 hover:bg-slate-100 dark:hover:bg-[#1c212b]'
+                  }`}
+                >
+                  <HardDrive className="w-4 h-4 text-slate-500 dark:text-slate-400 shrink-0" />
+                  <span className="truncate">Virtual (V:)</span>
+                </button>
+              </div>
+
+              {/* Extra Mounted Local PC Folders */}
               {mountedLocals.map((localAdapter, idx) => (
                 <button
                   key={`pc-${idx}`}
                   onClick={() => onOpenLocalAdapter(localAdapter)}
-                  className="w-full flex items-center gap-2 px-2 py-1.5 rounded-md text-xs text-slate-700 dark:text-slate-200 hover:bg-slate-100 dark:hover:bg-[#1c212b] transition-colors text-left"
+                  className="w-full flex items-center gap-2 pl-5 pr-2 py-1.5 rounded-md text-xs text-slate-700 dark:text-slate-200 hover:bg-slate-100 dark:hover:bg-[#1c212b] transition-colors text-left"
                 >
                   <HardDrive className="w-4 h-4 text-emerald-600 dark:text-emerald-400 shrink-0" />
                   <span className="truncate">{localAdapter.getRootName()}</span>
@@ -466,7 +605,7 @@ export function Sidebar({
               {/* Open PC Folder Trigger */}
               <button
                 onClick={onMountLocal}
-                className="w-full flex items-center gap-2 px-2 py-1.5 rounded-md text-xs text-emerald-700 dark:text-emerald-400 hover:bg-emerald-500/10 transition-colors text-left font-medium"
+                className="w-full flex items-center gap-2 pl-5 pr-2 py-1.5 rounded-md text-xs text-emerald-700 dark:text-emerald-400 hover:bg-emerald-500/10 transition-colors text-left font-medium"
               >
                 <FolderOpen className="w-4 h-4 shrink-0" />
                 <span className="truncate">Open PC Folder...</span>
@@ -475,7 +614,7 @@ export function Sidebar({
               {/* Recycle Bin */}
               <button
                 onClick={onOpenTrash}
-                className={`w-full flex items-center gap-2 px-2 py-1.5 rounded-md text-xs transition-colors text-left ${
+                className={`w-full flex items-center gap-2 pl-5 pr-2 py-1.5 rounded-md text-xs transition-colors text-left ${
                   currentPathString.includes('.Trash')
                     ? 'bg-slate-200/80 dark:bg-[#232936] text-slate-900 dark:text-white font-medium'
                     : 'text-slate-700 dark:text-slate-200 hover:bg-slate-100 dark:hover:bg-[#1c212b]'

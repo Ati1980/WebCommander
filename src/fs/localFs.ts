@@ -10,14 +10,23 @@ export class LocalFSAdapter implements FileAdapter {
   public type = 'local' as const;
   public rootHandle: FileSystemDirectoryHandle;
   public stack: LocalStackItem[];
+  public driveLabel?: string;
 
-  constructor(rootHandle: FileSystemDirectoryHandle, stack: LocalStackItem[] = []) {
+  constructor(
+    rootHandle: FileSystemDirectoryHandle,
+    stack: LocalStackItem[] = [],
+    driveLabel?: string
+  ) {
     this.rootHandle = rootHandle;
-    this.stack = stack.length > 0 ? stack : [{ name: rootHandle.name, handle: rootHandle }];
+    this.driveLabel = driveLabel;
+    this.stack =
+      stack.length > 0
+        ? stack
+        : [{ name: driveLabel || rootHandle.name, handle: rootHandle }];
   }
 
   getRootName(): string {
-    return this.rootHandle.name;
+    return this.driveLabel || this.rootHandle.name;
   }
 
   getPathString(): string {
@@ -217,12 +226,16 @@ export class LocalFSAdapter implements FileAdapter {
   async getChildAdapter(dirName: string): Promise<FileAdapter> {
     const dirHandle = this.getCurrentHandle();
     const childHandle = await dirHandle.getDirectoryHandle(dirName, { create: true });
-    return new LocalFSAdapter(this.rootHandle, [...this.stack, { name: dirName, handle: childHandle }]);
+    return new LocalFSAdapter(
+      this.rootHandle,
+      [...this.stack, { name: dirName, handle: childHandle }],
+      this.driveLabel
+    );
   }
 
   navigateToBreadcrumb(index: number): FileAdapter {
     const newStack = this.stack.slice(0, index + 1);
-    return new LocalFSAdapter(this.rootHandle, newStack);
+    return new LocalFSAdapter(this.rootHandle, newStack, this.driveLabel);
   }
 }
 

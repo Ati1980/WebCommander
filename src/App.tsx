@@ -33,7 +33,13 @@ import {
   InputModal,
 } from './components/Modals';
 import { QuickLookModal } from './components/QuickLookModal';
-import { Sidebar } from './components/Sidebar';
+import { DriveSlotState, Sidebar } from './components/Sidebar';
+import {
+  DriveSlotKey,
+  loadDriveHandle,
+  removeDriveHandle,
+  saveDriveHandle,
+} from './fs/driveHandlesDb';
 import {
   copyEntryBetweenAdapters,
   generateUniqueName,
@@ -158,6 +164,11 @@ export default function App() {
   const [activePane, setActivePane] = useState<PaneId>('left');
   const [leftPaneRatio, setLeftPaneRatio] = useState(50);
   const [mountedLocals, setMountedLocals] = useState<LocalFSAdapter[]>([]);
+  const [driveSlots, setDriveSlots] = useState<Record<DriveSlotKey, DriveSlotState>>({
+    C: { adapter: null, hasSavedHandle: false },
+    D: { adapter: null, hasSavedHandle: false },
+  });
+  const savedDriveHandlesRef = useRef<Partial<Record<DriveSlotKey, FileSystemDirectoryHandle>>>({});
 
   const [paneTabs, setPaneTabs] = useState<Record<PaneId, TabState[]>>(() => {
     const leftAdapter = new VirtualFSAdapter(virtualRootRef.current, ['Documents'], persistVirtual);
@@ -370,6 +381,43 @@ export default function App() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
+  // Hydrate saved C: and D: handles from IndexedDB
+  useEffect(() => {
+    (['C', 'D'] as DriveSlotKey[]).forEach(async (slot) => {
+      const handle = await loadDriveHandle(slot);
+      if (!handle) return;
+      savedDriveHandlesRef.current[slot] = handle;
+      const label = slot === 'C' ? 'OS (C:)' : 'DATA (D:)';
+      try {
+        const permHandle = handle as FileSystemDirectoryHandle & {
+          queryPermission?: (opts: { mode: string }) => Promise<string>;
+        };
+        const status = permHandle.queryPermission
+          ? await permHandle.queryPermission({ mode: 'readwrite' })
+          : 'prompt';
+        if (status === 'granted') {
+          setDriveSlots((prev) => ({
+            ...prev,
+            [slot]: {
+              adapter: new LocalFSAdapter(handle, [], label),
+              hasSavedHandle: true,
+            },
+          }));
+        } else {
+          setDriveSlots((prev) => ({
+            ...prev,
+            [slot]: { adapter: null, hasSavedHandle: true },
+          }));
+        }
+      } catch {
+        setDriveSlots((prev) => ({
+          ...prev,
+          [slot]: { adapter: null, hasSavedHandle: true },
+        }));
+      }
+    });
+  }, []);
+
   const refreshActiveTab = useCallback(
     async (paneId: PaneId) => {
       const tab = getActiveTab(paneId);
@@ -496,6 +544,95 @@ export default function App() {
       }
     },
     [addLog, navigateTabAdapter, showToast]
+  );
+
+  const handleOpenDriveSlot = useCallback(
+    async (slot: DriveSlotKey) => {
+      const label = slot === 'C' ? 'OS (C:)' : 'DATA (D:)';
+      const existingAdapter = driveSlots[slot].adapter;
+      if (existingAdapter) {
+        await navigateTabAdapter(activePane, existingAdapter, true);
+        return;
+      }
+
+      const savedHandle = savedDriveHandlesRef.current[slot];
+      if (savedHandle) {
+        try {
+          const permHandle = savedHandle as FileSystemDirectoryHandle & {
+            requestPermission?: (opts: { mode: string }) => Promise<string>;
+          };
+          const res = permHandle.requestPermission
+            ? await permHandle.requestPermission({ mode: 'readwrite' })
+            : 'granted';
+          if (res === 'granted') {
+            const adapter = new LocalFSAdapter(savedHandle, [], label);
+            setDriveSlots((prev) => ({
+              ...prev,
+              [slot]: { adapter, hasSavedHandle: true },
+            }));
+            await navigateTabAdapter(activePane, adapter, true);
+            return;
+          }
+        } catch {
+          // fallback to picker below
+        }
+      }
+
+      const picker = (
+        window as unknown as {
+          showDirectoryPicker?: (opts?: {
+            mode?: string;
+            id?: string;
+          }) => Promise<FileSystemDirectoryHandle>;
+        }
+      ).showDirectoryPicker;
+
+      if (typeof picker !== 'function') {
+        setModal({
+          type: 'alert',
+          title: `ไม่สามารถเปิด ${label} โดยตรงในหน้าต่างนี้`,
+          message:
+            `เนื่องจากข้อจำกัดด้านความปลอดภัยของเบราว์เซอร์ (หรือ iframe Preview) ไม่สามารถเข้าถึงไดรฟ์ ${slot}: โดยอัตโนมัติได้\n\nวิธีใช้งานกับไฟล์จริงใน ${label}:\n1. เปิดแอปนี้ในแท็บเบราว์เซอร์ Chrome / Edge โดยตรง แล้วคลิก ${label} เพื่อเลือกไดรฟ์ ${slot}:\\ หรือโฟลเดอร์ที่ต้องการ (ระบบจะจำค่าไว้ให้)\n2. หรือใช้วิธีลากไฟล์จาก ${label} ในเครื่องมาวางลงในหน้าต่างนี้ได้ทันที`,
+        });
+        return;
+      }
+
+      try {
+        const dirHandle = await picker({ mode: 'readwrite', id: `drive_${slot}` });
+        savedDriveHandlesRef.current[slot] = dirHandle;
+        await saveDriveHandle(slot, dirHandle);
+        const adapter = new LocalFSAdapter(dirHandle, [], label);
+        setDriveSlots((prev) => ({
+          ...prev,
+          [slot]: { adapter, hasSavedHandle: true },
+        }));
+        await navigateTabAdapter(activePane, adapter, true);
+        addLog(`เชื่อมต่อ ${label} (${dirHandle.name}) สำเร็จ`, 'success');
+        showToast(`เชื่อมต่อ ${label} (${dirHandle.name}) สำเร็จ`, 'success');
+      } catch (err) {
+        if (err instanceof Error && err.name !== 'AbortError') {
+          setModal({
+            type: 'alert',
+            title: `ไม่สามารถเข้าถึง ${label} ได้`,
+            message: `${err.message}\n\nหมายเหตุ: เบราว์เซอร์บางตัวอาจไม่อนุญาตให้เลือก Root ของไดรฟ์ระบบ (C:\\) ทั้งหมดโดยตรง แนะนำให้เลือกโฟลเดอร์ย่อย (เช่น Users, Work, Projects) บนไดรฟ์ ${slot}: แทนครับ`,
+          });
+        }
+      }
+    },
+    [activePane, addLog, driveSlots, navigateTabAdapter, showToast]
+  );
+
+  const handleUnlinkDriveSlot = useCallback(
+    async (slot: DriveSlotKey) => {
+      delete savedDriveHandlesRef.current[slot];
+      await removeDriveHandle(slot);
+      setDriveSlots((prev) => ({
+        ...prev,
+        [slot]: { adapter: null, hasSavedHandle: false },
+      }));
+      showToast(`ยกเลิกการเชื่อมต่อไดรฟ์ ${slot}: แล้ว`, 'info');
+    },
+    [showToast]
   );
 
   const askConflictResolution = useCallback((conflicts: string[]) => {
@@ -1504,6 +1641,7 @@ export default function App() {
           width={sidebarWidth}
           currentPathString={activeTab.adapter.getPathString()}
           virtualRoot={virtualRootRef.current}
+          driveSlots={driveSlots}
           mountedLocals={mountedLocals}
           favorites={favorites}
           shelf={shelf}
@@ -1514,6 +1652,8 @@ export default function App() {
             const v = new VirtualFSAdapter(virtualRootRef.current, path, persistVirtual);
             navigateTabAdapter(activePane, v, true);
           }}
+          onOpenDriveSlot={handleOpenDriveSlot}
+          onUnlinkDriveSlot={handleUnlinkDriveSlot}
           onOpenLocalAdapter={(localAdapter) => {
             navigateTabAdapter(activePane, localAdapter, true);
           }}
